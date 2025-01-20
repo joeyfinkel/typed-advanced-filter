@@ -1,5 +1,5 @@
 {
-  "name": "@monorepo/example-react-app",
+  "name": "@typed-advanced-filter/basic-example",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@monorepo/core": "workspace:*",
-    "@monorepo/react": "workspace:*",
+    "@typed-advanced-filter/core": "workspace:*",
+    "@typed-advanced-filter/react": "workspace:*",
     "react": "^18.0.0",
     "react-dom": "^18.0.0"
   },

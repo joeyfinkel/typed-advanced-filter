@@ -18,7 +18,7 @@
     "react-dom": "^18.0.0"
   },
   "dependencies": {
-    "@monorepo/core": "workspace:*"
+    "@typed-advanced-filter/core": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.0.0",

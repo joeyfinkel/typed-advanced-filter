@@ -14,10 +14,10 @@ importers:
 
   examples/react-app:
     dependencies:
-      '@monorepo/core':
+      '@typed-advanced-filter/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@monorepo/react':
+      '@typed-advanced-filter/react':
         specifier: workspace:*
         version: link:../../packages/react
       react:
@@ -44,6 +44,10 @@ importers:
         version: 5.4.11
 
   packages/core:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.24.1
     devDependencies:
       typescript:
         specifier: ^5.0.0
@@ -51,7 +55,7 @@ importers:
 
   packages/react:
     dependencies:
-      '@monorepo/core':
+      '@typed-advanced-filter/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -78,7 +82,7 @@ importers:
         version: 5.4.11
       vite-plugin-dts:
         specifier: ^3.0.0
-        version: 3.9.1(typescript@5.7.3)(vite@5.4.11)
+        version: 3.9.1(rollup@4.30.1)(typescript@5.7.3)(vite@5.4.11)
 
 packages:
 
@@ -888,6 +892,9 @@ packages:
     engines: {node: '>=8.0.0'}
     hasBin: true
 
+  zod@3.24.1:
+    resolution: {integrity: sha512-muH7gBL9sI1nciMZV67X5fTKKBLtwpZ5VBp1vsOQzj1MhrBZ4wlVCm3gedKZWLp0Oyel8sIGfeiz54Su+OVT+A==}
+
 snapshots:
 
   '@ampproject/remapping@2.3.0':
@@ -1126,11 +1133,13 @@ snapshots:
 
   '@microsoft/tsdoc@0.14.2': {}
 
-  '@rollup/pluginutils@5.1.4':
+  '@rollup/pluginutils@5.1.4(rollup@4.30.1)':
     dependencies:
       '@types/estree': 1.0.6
       estree-walker: 2.0.2
       picomatch: 4.0.2
+    optionalDependencies:
+      rollup: 4.30.1
 
   '@rollup/rollup-android-arm-eabi@4.30.1':
     optional: true
@@ -1300,8 +1309,9 @@ snapshots:
       minimatch: 9.0.5
       muggle-string: 0.3.1
       path-browserify: 1.0.1
-      typescript: 5.7.3
       vue-template-compiler: 2.7.16
+    optionalDependencies:
+      typescript: 5.7.3
 
   '@vue/shared@3.5.13': {}
 
@@ -1586,17 +1596,18 @@ snapshots:
 
   validator@13.12.0: {}
 
-  vite-plugin-dts@3.9.1(typescript@5.7.3)(vite@5.4.11):
+  vite-plugin-dts@3.9.1(rollup@4.30.1)(typescript@5.7.3)(vite@5.4.11):
     dependencies:
       '@microsoft/api-extractor': 7.43.0
-      '@rollup/pluginutils': 5.1.4
+      '@rollup/pluginutils': 5.1.4(rollup@4.30.1)
       '@vue/language-core': 1.8.27(typescript@5.7.3)
       debug: 4.4.0
       kolorist: 1.8.0
       magic-string: 0.30.17
       typescript: 5.7.3
-      vite: 5.4.11
       vue-tsc: 1.8.27(typescript@5.7.3)
+    optionalDependencies:
+      vite: 5.4.11
     transitivePeerDependencies:
       - '@types/node'
       - rollup
@@ -1633,3 +1644,5 @@ snapshots:
       validator: 13.12.0
     optionalDependencies:
       commander: 9.5.0
+
+  zod@3.24.1: {}
