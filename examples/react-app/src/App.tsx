@@ -1,15 +1,25 @@
-import React from 'react'
-import { Button } from '@monorepo/react'
-import { add } from '@monorepo/core'
+import { createFilterRows } from '@typed-advanced-filter/core';
 
+const rows = createFilterRows({
+  name: {
+    rules: ['is', 'is-not', 'contains', 'not-contains'],
+    text: 'Name',
+    type: 'string',
+  },
+  id: {
+    rules: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'],
+    text: 'ID',
+    type: 'number',
+  },
+});
+// const rows = createFilterRows(['name', 'id'], {
 function App() {
+  console.log(rows);
   return (
-    <div className="app">
-      <h1>Example React App</h1>
-      <p>2 + 2 = {add(2, 2)}</p>
-      <Button />
+    <div className='app'>
+      <pre>{JSON.stringify(rows, null, 2)}</pre>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
