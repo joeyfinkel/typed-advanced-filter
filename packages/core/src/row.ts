@@ -95,11 +95,25 @@ export type RowValue<
   value?: TValue | (string & {});
 };
 export type RowMap = Record<string, RowValue>;
-export type Row<TMap extends Partial<RowMap>> = {
-  [Key in keyof TMap]: Key extends string
-    ? RowResultOptions<FilterTypes, Key>
-    : never;
-};
+export type GetRowMapProps<
+  TMap extends RowMap,
+  TProp extends keyof TMap[keyof TMap]
+> = TMap[keyof TMap] extends string ? TMap[keyof TMap][TProp] : never;
+export type Row<TMap extends Partial<RowMap>> = Prettify<
+  Omit<
+    // TODO Fix these errors
+    RowOptions<
+      // @ts-expect-error - Type 'TMap[keyof TMap]["type"]' does not satisfy the constraint 'FilterTypes'.
+      TMap[keyof TMap]['type'],
+      keyof TMap,
+      GetOperator<
+        // @ts-expect-error - Type 'TMap[keyof TMap]["type"]' does not satisfy the constraint 'FilterTypes'.
+        TMap[keyof TMap]['type']
+      >
+    >,
+    'rules'
+  >
+> & { rules: RuleSchema<FilterTypes> };
 
 function formatRows<TMap extends RowMap>(map: TMap) {
   const rows: Array<Row<TMap>> = [];
@@ -112,17 +126,27 @@ function formatRows<TMap extends RowMap>(map: TMap) {
       ...rest,
     };
 
-    // TODO: Fix this "any" cast
+    // TODO Fix this 'as any' cast
     rows.push(row as any);
   }
 
   return rows;
 }
 
+/**
+ * Create filter rows with the given configuration.
+ * @param keys A list of the row keys to create.
+ * @param rows The row configuration. Each row must have a key that matches the key in the `keys` array.
+ */
 export function createFilterRows<
   const TKeys extends string,
   TMap extends RowMap
 >(keys: Array<TKeys>, rows: TMap): Array<Row<TMap>>;
+/**
+ * Create filter rows with the given configuration.
+ * @param rows The row configuration.
+ */
+// TODO Autocomplete for the `rows` parameter is not working
 export function createFilterRows<TMap extends RowMap>(
   rows: TMap
 ): Array<Row<TMap>>;
