@@ -1,3 +1,4 @@
+import { DetailedError } from './errors/detailedError';
 import { FilterOperatorMap, GetOperator } from './operators';
 import { buildRules, RuleMap, RuleSchema } from './rule';
 import { DeepKeys, Prettify, typedEntries } from './utils';
@@ -117,9 +118,22 @@ export type Row<TMap extends Partial<RowMap>> = Prettify<
     'rules'
   >
 > & { rules: RuleSchema<FilterTypes> };
+export type GetRow<TMap extends Partial<RowMap>, TKey extends keyof TMap> = Row<
+  Pick<TMap, TKey>
+>;
+
+interface CustomRowsArray<TMap extends RowMap> extends Array<Row<TMap>> {
+  findFirst(): Row<TMap> | undefined;
+
+  get<TValue extends keyof TMap, TRow extends Pick<TMap, TValue>>(
+    value: TValue
+  ): Row<TRow> | undefined;
+  get(index: number): Row<TMap> | undefined;
+}
 
 function formatRows<TMap extends RowMap>(map: TMap) {
-  const rows: Array<Row<TMap>> = [];
+  // const rows: Array<Row<TMap>> = [];
+  const rows = new Rows<TMap>();
 
   for (const [key, { rules: inferredRules, value, ...rest }] of typedEntries(
     map
@@ -139,30 +153,69 @@ function formatRows<TMap extends RowMap>(map: TMap) {
   return rows;
 }
 
+class Rows<TMap extends RowMap>
+  extends Array<Row<TMap>>
+  implements CustomRowsArray<TMap>
+{
+  /**
+   * Gets a row by it's value.
+   * @param value The value of the row to get.
+   */
+  get<TKey extends keyof TMap, TRow extends Pick<TMap, TKey>>(
+    key: TKey
+  ): Row<TRow> | undefined;
+  /**
+   * Gets a row at the given index.
+   */
+  get(index: number): Row<TMap> | undefined;
+  get(param: unknown): Row<TMap> | undefined {
+    if (typeof param === 'string') {
+      return this.find(({ value }) => value === param);
+    }
+
+    if (typeof param === 'number') {
+      return this[param];
+    }
+
+    throw new Error(
+      'Type of param must either be a number or a key of the row map'
+    );
+  }
+
+  /**
+   * Finds the first row.
+   */
+  findFirst(): Row<TMap> | undefined {
+    return this[0];
+  }
+}
+
 /**
  * Create filter rows with the given configuration.
  * @param keys A list of the row keys to create.
  * @param rows The row configuration. Each row must have a key that matches the key in the `keys` array.
+ * @throws {DetailedError} if no {@linkcode rows} is provided.
  */
 export function createFilterRows<
   const TKeys extends string,
   TMap extends RowMap<TKeys>
->(keys: Array<TKeys>, rows: TMap): Array<Row<TMap>>;
+>(keys: Array<TKeys>, rows: TMap): Rows<TMap>;
 /**
  * Create filter rows with the given configuration.
  * @param rows The row configuration.
  */
 // TODO Autocomplete for the `rows` parameter is not working
-export function createFilterRows<TMap extends RowMap>(
-  rows: TMap
-): Array<Row<TMap>>;
+export function createFilterRows<TMap extends RowMap>(rows: TMap): Rows<TMap>;
 export function createFilterRows<
   const TKeys extends string,
   TMap extends RowMap
 >(rowsOrKeys: TMap | Array<TKeys>, rows?: TMap) {
   if (Array.isArray(rowsOrKeys)) {
     if (!rows) {
-      throw new Error('[createFilterRows]: Provided `keys` but no `config`');
+      throw new DetailedError(
+        'createFilterRows',
+        'Provided "keys" but no "config"'
+      );
     }
 
     return formatRows(rows);
