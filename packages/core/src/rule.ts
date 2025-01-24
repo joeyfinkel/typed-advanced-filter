@@ -1,8 +1,6 @@
-import {
-  GetOperator,
-  getOperators,
-  isValidOperator
-} from './operators';
+import { DetailedError } from './errors/detailedError';
+import { InvalidOperatorError } from './errors/invalidOperator';
+import { GetOperator, getOperators, isValidOperator } from './operators';
 import { FilterTypes } from './row';
 import { removeKeys, typedEntries } from './utils';
 
@@ -149,20 +147,21 @@ export function buildRules<
 
   return entries.map(([key, value]) => {
     if (!isValidOperator(filterType, key)) {
-      const mainMessage = `[buildRules]: Operator "${key}". is not valid for row type of "${filterType}"`;
+      const mainMessage = `Operator "${key}". is not valid for row type of "${filterType}"`;
       const validOperators = getOperators(filterType);
 
       if (validOperators) {
-        throw new Error(
+        throw new InvalidOperatorError(
+          'buildRules',
           `${mainMessage}. Valid operators are: ${validOperators.join(', ')}.`
         );
       }
 
-      throw new Error(`${mainMessage}.`);
+      throw new InvalidOperatorError('buildRules', `${mainMessage}.`);
     }
 
     if (!value) {
-      throw new Error(`[buildRules]: Row value not found for ${key}.`);
+      throw new DetailedError('buildRules', `Row value not found for ${key}.`);
     }
 
     return buildRule({
