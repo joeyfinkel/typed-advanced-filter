@@ -4,45 +4,6 @@ import { DeepKeys, Prettify, typedEntries } from './utils';
 
 export type NonNestedFilterTypes = Exclude<FilterTypes, `${string}.${string}`>;
 export type NestedFilterTypes = Exclude<FilterTypes, NonNestedFilterTypes>;
-// export type GetNestedFilters<T extends string> =
-//   T extends `${string}.${infer Nested}` ? Nested | GetNestedFilters<Nested> : never;
-export type GetNestedFilters<
-  T extends string,
-  Depth extends number
-> = Depth extends 0
-  ? never
-  : T extends `${infer Top}.${infer Nested}`
-  ? Depth extends 1
-    ? Top
-    : GetNestedFilters<Nested, Subtract<Depth, 1>>
-  : never;
-
-type Test = GetNestedFilters<NestedFilterTypes, 2>;
-//   ^?
-// Helper type to subtract 1 from a number
-type Subtract<N extends number, M extends number> = N extends M
-  ? 0
-  : N extends 0
-  ? 0
-  : N extends 1
-  ? 0
-  : N extends 2
-  ? 1
-  : N extends 3
-  ? 2
-  : N extends 4
-  ? 3
-  : N extends 5
-  ? 4
-  : N extends 6
-  ? 5
-  : N extends 7
-  ? 6
-  : N extends 8
-  ? 7
-  : N extends 9
-  ? 8
-  : never;
 
 export type FilterTypes = Exclude<
   DeepKeys<FilterOperatorMap>,
@@ -136,7 +97,7 @@ export type RowValue<
 > = Omit<RowOptions<TFilterType, TValue, TOperator>, 'value'> & {
   value?: TValue | (string & {});
 };
-export type RowMap = Record<string, RowValue>;
+export type RowMap<TKeys extends string = string> = Record<TKeys, RowValue>;
 export type GetRowMapProps<
   TMap extends RowMap,
   TProp extends keyof TMap[keyof TMap]
@@ -185,7 +146,7 @@ function formatRows<TMap extends RowMap>(map: TMap) {
  */
 export function createFilterRows<
   const TKeys extends string,
-  TMap extends RowMap
+  TMap extends RowMap<TKeys>
 >(keys: Array<TKeys>, rows: TMap): Array<Row<TMap>>;
 /**
  * Create filter rows with the given configuration.
