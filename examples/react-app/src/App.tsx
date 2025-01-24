@@ -1,18 +1,24 @@
 import { createFilterRows } from '@typed-advanced-filter/core';
 
-const rows = createFilterRows({
+const rows = createFilterRows(['name'], {
   name: {
-    rules: ['is', 'is-not', 'contains', 'not-contains'],
+    rules: {
+      contains: 'Contains',
+      'not-contains': {
+        text: 'Not Contains',
+        type: 'string',
+      },
+    },
     text: 'Name',
     type: 'string',
   },
-  id: {
-    rules: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'],
-    text: 'ID',
-    type: 'number',
-  },
+  // id: {
+  //   rules: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'],
+  //   text: 'ID',
+  //   type: 'number',
+  // },
 });
-// const rows = createFilterRows(['name', 'id'], {
+
 function App() {
   console.log(rows);
   return (

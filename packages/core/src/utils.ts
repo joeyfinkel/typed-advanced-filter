@@ -36,3 +36,13 @@ export function typedEntries<S extends string, T>(
 ) {
   return Object.entries(o) as Array<[S, T]>;
 }
+export function removeKeys<T extends object>(
+  obj: T,
+  keysToRemove: (keyof T)[]
+) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(
+      ([key]) => !keysToRemove.includes(key as keyof T)
+    )
+  ) as T;
+}

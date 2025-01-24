@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FilterTypes } from './row';
+import { FilterTypes, NonNestedFilterTypes } from './row';
 import { DeepKeys, DeepValueAt, EnsureIs } from './utils';
 
 export type IsOperators = z.infer<typeof isOperators>;
@@ -72,7 +72,7 @@ const dateOperators = z.union([
   emptyOperators,
   z.enum(['between']),
 ]);
-const filterOperatorMap = z.object({
+export const filterOperatorMap = z.object({
   boolean: isOperators,
   string: stringOperators,
   number: numberOperators,
@@ -110,4 +110,31 @@ export function isBasicDateOperator(operator: string) {
 }
 export function isDateOperator(operator: string) {
   return is<DateOperators>(dateOperators, operator);
+}
+
+/**
+ * Checks if the {@linkcode operator} is valid for the given {@linkcode filterType}.
+ */
+export function isValidOperator<
+  TFilterType extends FilterTypes,
+  TOperator extends GetOperator<FilterTypes>
+>(filterType: TFilterType, operator: TOperator): operator is TOperator {
+  // TODO Add check for nested filters
+
+  const shape = filterOperatorMap.shape[filterType as NonNestedFilterTypes];
+  const parsed = shape.safeParse(operator);
+
+  return parsed.success;
+}
+
+export function getOperators<TFilterType extends FilterTypes>(
+  filterType: TFilterType
+) {
+  const shape = filterOperatorMap.shape[filterType as NonNestedFilterTypes];
+
+  if ('options' in shape._def) {
+    const options = shape._def.options.flatMap(({ _def }) => _def.values);
+
+    return options;
+  }
 }

@@ -1,6 +1,48 @@
 import { FilterOperatorMap, GetOperator } from './operators';
-import { RuleSchema } from './rule';
+import { buildRules, RuleMap, RuleSchema } from './rule';
 import { DeepKeys, Prettify, typedEntries } from './utils';
+
+export type NonNestedFilterTypes = Exclude<FilterTypes, `${string}.${string}`>;
+export type NestedFilterTypes = Exclude<FilterTypes, NonNestedFilterTypes>;
+// export type GetNestedFilters<T extends string> =
+//   T extends `${string}.${infer Nested}` ? Nested | GetNestedFilters<Nested> : never;
+export type GetNestedFilters<
+  T extends string,
+  Depth extends number
+> = Depth extends 0
+  ? never
+  : T extends `${infer Top}.${infer Nested}`
+  ? Depth extends 1
+    ? Top
+    : GetNestedFilters<Nested, Subtract<Depth, 1>>
+  : never;
+
+type Test = GetNestedFilters<NestedFilterTypes, 2>;
+//   ^?
+// Helper type to subtract 1 from a number
+type Subtract<N extends number, M extends number> = N extends M
+  ? 0
+  : N extends 0
+  ? 0
+  : N extends 1
+  ? 0
+  : N extends 2
+  ? 1
+  : N extends 3
+  ? 2
+  : N extends 4
+  ? 3
+  : N extends 5
+  ? 4
+  : N extends 6
+  ? 5
+  : N extends 7
+  ? 6
+  : N extends 8
+  ? 7
+  : N extends 9
+  ? 8
+  : never;
 
 export type FilterTypes = Exclude<
   DeepKeys<FilterOperatorMap>,
@@ -33,7 +75,7 @@ type BaseRowOptions<
   value: TValue;
   type: TFilterType;
   // rules: RuleMap<TFilterType, TOperator>;
-  rules: Array<string>;
+  rules: RuleMap<TFilterType, TOperator>;
 };
 export type CustomOptionType = 'merge' | 'replace';
 export type CustomOptions<
@@ -118,8 +160,11 @@ export type Row<TMap extends Partial<RowMap>> = Prettify<
 function formatRows<TMap extends RowMap>(map: TMap) {
   const rows: Array<Row<TMap>> = [];
 
-  for (const [key, { rules, value, ...rest }] of typedEntries(map)) {
+  for (const [key, { rules: inferredRules, value, ...rest }] of typedEntries(
+    map
+  )) {
     const rowValue = value ?? key;
+    const rules = buildRules({ filterType: rest.type, rules: inferredRules });
     const row = {
       rules,
       value: rowValue,
@@ -156,7 +201,7 @@ export function createFilterRows<
 >(rowsOrKeys: TMap | Array<TKeys>, rows?: TMap) {
   if (Array.isArray(rowsOrKeys)) {
     if (!rows) {
-      throw new Error('[createFilterRow]: Provided `keys` but no `config`');
+      throw new Error('[createFilterRows]: Provided `keys` but no `config`');
     }
 
     return formatRows(rows);
