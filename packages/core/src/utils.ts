@@ -1,4 +1,11 @@
 export type JoinPath<K extends string, P extends string> = `${K}.${P}`;
+export type Join<
+  T extends Array<unknown>,
+  TDelimiter extends string,
+> = T extends [infer Head extends string, ...infer Rest extends Array<string>]
+  ? `${Head}${Rest['length'] extends 0 ? '' : TDelimiter}${Join<Rest, TDelimiter>}`
+  : '';
+
 export type DeepKeys<T> = T extends object
   ? {
       [K in keyof T]: K extends string
@@ -30,11 +37,25 @@ export type GetProp<
   T extends Partial<Record<string, unknown>>,
   K extends keyof T
 > = T[K];
+export type Split<
+  S extends string,
+  D extends string
+> = S extends `${infer Part}${D}${infer Rest}`
+  ? [Part, ...Split<Rest, D>]
+  : [S];
 
 export function typedEntries<S extends string, T>(
   o: { [s in S]: T } | ArrayLike<T>
 ) {
   return Object.entries(o) as Array<[S, T]>;
+}
+export function typedSplit<Word extends string, Separator extends string>(
+  word: Word,
+  separator: Separator
+) {
+  const split = word.split(separator) as Split<Word, Separator>;
+
+  return split;
 }
 export function removeKeys<T extends object>(
   obj: T,

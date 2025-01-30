@@ -21,7 +21,7 @@ export type BaseRuleOptions<
   /**
    * Nested rules.
    */
-  children?: Array<NoInfer<RuleSchema<TFilterType, TValue, TOptionalValue>>>;
+  children?: Array<NoInfer<RuleSchema<FilterTypes>>>;
   /**
    * Sibling rules.
    */
@@ -85,6 +85,17 @@ export function isRuleSchema<
   }
 
   return false;
+}
+
+export function isRule<
+  TFilterType extends FilterTypes,
+  TOperator extends GetOperator<TFilterType>
+>(value: unknown): value is Rule<TFilterType, TOperator> {
+  if (typeof value === 'string') {
+    return true;
+  }
+
+  return isRuleSchema(value);
 }
 
 export function buildRule<
