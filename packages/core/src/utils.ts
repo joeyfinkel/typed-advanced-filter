@@ -51,10 +51,19 @@ export type Includes<
   T extends string,
   U extends string
 > = T extends `${infer _Start}${U}${infer _End}` ? true : false;
+
 export function typedEntries<S extends string, T>(
   o: { [s in S]: T } | ArrayLike<T>
 ) {
   return Object.entries(o) as Array<[S, T]>;
+}
+export function typedSplit<Word extends string, Separator extends string>(
+  word: Word,
+  separator: Separator
+) {
+  const split = word.split(separator) as Split<Word, Separator>;
+
+  return split;
 }
 export function removeKeys<T extends object>(
   obj: T,
