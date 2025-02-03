@@ -1,31 +1,31 @@
 import { GetOperator } from './operators';
 import { DateFilterTypes } from './row';
-import {
-  buildRule,
-  buildRules,
-  RuleMap,
-  RuleSchema
-} from './rule';
-import { typedEntries } from './utils';
+import { buildRule, buildRules, RuleMap, RuleSchema } from './rule';
+import { RemovePrefix, typedEntries } from './utils';
 import {
   ExcludeOmitted,
   getExclusive,
   OmitOrIncludeOptions,
 } from './utils/getExclusive';
 
+type CompactDateOptions = RemovePrefix<DateFilterTypes, 'date.'>;
 export type CreateDateOptions<
-  TFilterType extends DateFilterTypes,
-  TOperator extends GetOperator<TFilterType>,
+  TFilterType extends CompactDateOptions,
+  TOperator extends GetOperator<`date.${TFilterType}`>,
   TOmit extends TOperator = never,
   TInclude extends ExcludeOmitted<TOperator, TOmit> = ExcludeOmitted<
     TOperator,
     TOmit
   >,
-  TRuleMap extends RuleMap<TFilterType, TInclude> = RuleMap<
-    TFilterType,
+  TRuleMap extends RuleMap<`date.${TFilterType}`, TInclude> = RuleMap<
+    `date.${TFilterType}`,
     TInclude
   >
-> = OmitOrIncludeOptions<TFilterType, TOmit, TInclude> & {
+> = Omit<
+  OmitOrIncludeOptions<`date.${TFilterType}`, TOmit, TInclude>,
+  'filterType'
+> & {
+  filterType: TFilterType;
   rules?: TRuleMap;
 };
 
@@ -64,7 +64,7 @@ export const basicDateOptions = buildRules({
   },
 });
 
-export const filterMap: {
+export const dateFilterOptions: {
   [Key in DateFilterTypes]: Array<RuleSchema<Key, GetOperator<Key>>>;
 } = {
   'date.basic': basicDateOptions,
@@ -74,29 +74,32 @@ export const filterMap: {
 };
 
 export function createDateOptions<
-  TFilterType extends DateFilterTypes,
-  TOperator extends GetOperator<TFilterType>,
+  TFilterType extends CompactDateOptions,
+  TOperator extends GetOperator<`date.${TFilterType}`>,
   TOmit extends TOperator = never,
   TInclude extends ExcludeOmitted<TOperator, TOmit> = ExcludeOmitted<
     TOperator,
     TOmit
   >,
-  TRuleMap extends RuleMap<TFilterType, TInclude> = RuleMap<
-    TFilterType,
+  TRuleMap extends RuleMap<`date.${TFilterType}`, TInclude> = RuleMap<
+    `date.${TFilterType}`,
     TInclude
   >
 >(
   options: CreateDateOptions<TFilterType, TOperator, TOmit, TInclude, TRuleMap>
 ) {
-  const { filterType, include, omit, rules } = options;
-  const currentRules = filterMap[filterType];
+  const { filterType: filterTypeImpl, include, omit, rules } = options;
+  const filterType = `date.${filterTypeImpl}` as const;
+  const currentRules = dateFilterOptions[filterType];
 
   const exclusive = getExclusive({ filterType, include, omit });
 
   if (rules) {
     for (const [key, value] of typedEntries(rules)) {
       if (
-        exclusive.includes(key as Extract<GetOperator<TFilterType>, TInclude>)
+        exclusive.includes(
+          key as Extract<GetOperator<`date.${TFilterType}`>, TInclude>
+        )
       ) {
         const index = currentRules.findIndex((rule) => rule.value === key);
 
@@ -112,5 +115,5 @@ export function createDateOptions<
     }
   }
 
-  return currentRules as Array<RuleSchema<TFilterType, TInclude>>;
+  return currentRules as Array<RuleSchema<`date.${TFilterType}`, TInclude>>;
 }

@@ -25,7 +25,6 @@ export type DeepValueAt<T, P extends DeepKeys<T>> = P extends keyof T
     ? DeepValueAt<T[K], R & DeepKeys<T[K]>>
     : never
   : never;
-type Test = DeepValueAt<{ foo: { bar: { baz: '' } } }, 'foo.bar'>;
 export type Prettify<T> = {
   [K in keyof T]: T[K];
 } & {};
@@ -51,6 +50,10 @@ export type Includes<
   T extends string,
   U extends string
 > = T extends `${infer _Start}${U}${infer _End}` ? true : false;
+export type RemovePrefix<
+  T extends string,
+  Prefix extends string
+> = T extends `${Prefix}${infer Rest}` ? Rest : T;
 
 export function typedEntries<S extends string, T>(
   o: { [s in S]: T } | ArrayLike<T>
