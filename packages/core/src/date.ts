@@ -1,12 +1,10 @@
 import { GetOperator } from './operators';
-import { DateFilterTypes, FilterTypes } from './row';
+import { DateFilterTypes } from './row';
 import {
   buildRule,
   buildRules,
-  isRule,
-  Rule,
   RuleMap,
-  RuleSchema,
+  RuleSchema
 } from './rule';
 import { typedEntries } from './utils';
 import {
@@ -116,14 +114,3 @@ export function createDateOptions<
 
   return currentRules as Array<RuleSchema<TFilterType, TInclude>>;
 }
-
-const options = createDateOptions({
-  filterType: 'date.days.weekends',
-  omit: ['saturday'],
-  rules: {
-    sunday: {
-      text: 'Sunday',
-      type: 'boolean',
-    },
-  },
-});
