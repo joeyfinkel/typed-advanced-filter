@@ -9,7 +9,8 @@ export type NestedFilterTypes = Exclude<FilterTypes, NonNestedFilterTypes>;
 export type FilterTypes = Exclude<
   DeepKeys<FilterOperatorMap>,
   `${string}.main`
->;
+  >;
+export type DateFilterTypes = Extract<FilterTypes, `date.${string}`>
 export type GetFilterTypeByValue<TValue extends GetOperator = GetOperator> =
   keyof {
     [K in keyof FilterOperatorMap as TValue extends FilterOperatorMap[K]
