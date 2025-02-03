@@ -1,12 +1,13 @@
-import { z } from 'zod';
+import { z, ZodEnum, ZodUnion } from 'zod';
 import { DetailedError } from './errors/detailedError';
-import { FilterTypes, NonNestedFilterTypes } from './row';
+import { FilterTypes, NestedFilterTypes, NonNestedFilterTypes } from './row';
 import {
   DeepKeys,
   DeepValueAt,
   EnsureIs,
-  Join,
-  Split
+  Includes,
+  Split,
+  typedSplit,
 } from './utils';
 
 export type IsOperators = z.infer<typeof isOperators>;
@@ -53,51 +54,41 @@ export type GetOperator<TFilterType extends FilterTypes = FilterTypes> =
       : DeepValueAt<FilterOperatorMap, TFilterType>
     : GetMain<TFilterType>;
 
-type NestedOperators<TMain, TOther> = { main: TMain } & TOther;
-type GetFilterMapShape<TFilterType extends FilterTypes> = Split<
-  TFilterType,
-  '.'
-> extends [infer Top extends NonNestedFilterTypes, ...infer Rest]
-  ? Rest extends []
-    ? (typeof filterOperatorMap)['_output'][Top] extends NestedOperators<
-        infer Main,
-        infer Other
-      >
-      ? Rest[number] extends never
-        ? Main
-        : Other
-      : (typeof filterOperatorMap)['_output'][Top]
-    : Join<Rest, '.'> extends DeepKeys<
-        (typeof filterOperatorMap)['_output'][Top]
-      >
-    ? Includes<
-        Join<Rest, '.'>,
-        keyof DeepValueAt<
-          (typeof filterOperatorMap)['_output'][Top],
-          Join<Rest, '.'>
-        > extends string
-          ? keyof DeepValueAt<
-              (typeof filterOperatorMap)['_output'][Top],
-              Join<Rest, '.'>
-            >
-          : string
-      > extends false
-      ? DeepValueAt<
-          (typeof filterOperatorMap)['_output'][Top],
-          Join<Rest, '.'>
-        > extends NestedOperators<infer Main, infer _>
-        ? Main
-        : DeepValueAt<
-            (typeof filterOperatorMap)['_output'][Top],
-            Join<Rest, '.'>
-          >
-      : DeepValueAt<(typeof filterOperatorMap)['_output'][Top], Join<Rest, '.'>>
+type NestedOperators<TMain, TOther = unknown> = { main: TMain } & TOther;
+type FilterOperatorMapShape = (typeof filterOperatorMap)['shape'];
+type GetNestedShape<T, Parts extends string[]> = Parts extends [
+  infer First extends string,
+  ...infer Rest extends string[]
+]
+  ? First extends keyof T
+    ? Rest['length'] extends 0
+      ? T[First] extends z.ZodObject<infer S>
+        ? S extends NestedOperators<infer Main>
+          ? Main
+          : S
+        : T[First]
+      : T[First] extends z.ZodObject<any>
+      ? GetNestedShape<T[First]['shape'], Rest>
+      : never
     : never
   : never;
-type Includes<
-  T extends string,
-  U extends string
-> = T extends `${infer _Start}${U}${infer _End}` ? true : false;
+
+type DeepShape<T extends FilterTypes> = T extends NestedFilterTypes
+  ? Split<T, '.'> extends [
+      infer First extends NonNestedFilterTypes,
+      ...infer Rest extends string[]
+    ]
+    ? GetNestedShape<FilterOperatorMapShape, [First, ...Rest]>
+    : `Somehow, "${T}" was not Split on the ".'s"`
+  : T extends NonNestedFilterTypes
+  ? FilterOperatorMapShape[T] extends z.ZodObject<infer S>
+    ? Includes<T, '.'> extends true
+      ? 'Is nested'
+      : S extends NestedOperators<infer Main>
+      ? Main
+      : 'No need to get main'
+    : FilterOperatorMapShape[T]
+  : `Param ("${T}") is neither 'NestedFilterTypes' or 'NonNestedFilterTypes'`;
 
 const isOperators = z.enum(['is', 'is-not']);
 const containsOperators = z.enum(['contains', 'not-contains']);
@@ -172,31 +163,40 @@ export function isDateOperator(operator: string) {
   return is<DateOperators>(dateOperators, operator);
 }
 
-// function isNestedFilter<TFilterType extends FilterTypes>(
-//   filterType: TFilterType
-// ): filterType is Extract<FilterTypes, `${string}.${string}`> {
-//   return filterType.includes('.');
-// }
+function getShape<TFilterType extends FilterTypes>(filterType: TFilterType) {
+  const segments = filterType.includes('.')
+    ? typedSplit(filterType, '.')
+    : [filterType];
+  let currentSchema: z.ZodTypeAny = filterOperatorMap;
 
-function getFilterMapShape<TFilterType extends FilterTypes>(
-  filterType: TFilterType
-) {
-  const keys = filterType.split('.');
-  let currentSchema: z.ZodType<any> | undefined = filterOperatorMap;
-
-  for (const key of keys) {
-    if (!currentSchema || !(currentSchema instanceof z.ZodObject)) {
-      return undefined; // Not a valid schema or not an object
+  for (const segment of segments) {
+    if (!(currentSchema instanceof z.ZodObject)) {
+      throw new Error(`Schema at path "${filterType}" is not a Zod object`);
     }
-    const shape = currentSchema.shape[key];
 
-    if (!shape) {
-      return undefined; // Key not found in the current schema
+    const shape = currentSchema.shape;
+
+    if (!(segment in shape)) {
+      throw new Error(
+        `Invalid path segment "${segment}" in path "${filterType}"`
+      );
     }
-    currentSchema = shape; // Move to the next level
+
+
+    currentSchema = shape[segment];
+
+    // If we have a nested operator schema with a 'main' property, return that
+    if (
+      currentSchema instanceof z.ZodObject &&
+      'main' in currentSchema.shape &&
+      // TODO `indexOf` is saying it needs `never`. Not sure why. Look into this
+      segments.indexOf(segment as never) === segments.length - 1
+    ) {
+      currentSchema = currentSchema.shape.main;
+    }
   }
 
-  return currentSchema;
+  return currentSchema as DeepShape<TFilterType>;
 }
 
 /**
@@ -206,7 +206,7 @@ export function isValidOperator<
   TFilterType extends FilterTypes,
   TOperator extends GetOperator<FilterTypes>
 >(filterType: TFilterType, operator: TOperator): operator is TOperator {
-  const shape = getFilterMapShape(filterType);
+  const shape = getShape(filterType);
 
   if (shape) {
     // Now we have the final schema for the operator
@@ -217,89 +217,25 @@ export function isValidOperator<
 
   return false;
 }
-// export function isValidOperator<
-//   TFilterType extends FilterTypes,
-//   TOperator extends GetOperator<FilterTypes>
-// >(
-//   filterType: TFilterType,
-//   operator: TOperator,
-//   partIndexer = 0
-// ): operator is TOperator {
-//   // TODO Add check for nested filters
-
-//   if (isNestedFilter(filterType)) {
-
-//   }
-
-//   const shape = filterOperatorMap.shape[filterType as NonNestedFilterTypes];
-//   const parsed = shape.safeParse(operator);
-
-//   return parsed.success;
-// }
-// function getOperatorsHelper<TFilterType extends FilterTypes>(
-//   shape: z.ZodTypeAny
-// ) {
-//   if ('options' in shape._def && Array.isArray(shape._def.options)) {
-//     const options = shape._def.options.flatMap((option) => {
-//       if ('_def' in option) {
-//         if ('options' in option._def) {
-//           return option._def.options;
-//         }
-
-//         if ('values' in option._def) {
-//           return option._def.options;
-//         }
-//       }
-//     });
-
-//     return options as Array<GetOperator<TFilterType>>;
-//   }
-
-//   if ('values' in shape._def) {
-//     return shape._def.values as Array<GetOperator<TFilterType>>;
-//   }
-
-//   return [];
-// }
-
-function getOperatorsHelper<TFilterType extends FilterTypes>(
-  shape: (typeof filterOperatorMap)['shape']['boolean']
-) {
-  if ('options' in shape._def && Array.isArray(shape._def.options)) {
-    const options = shape._def.options.flatMap((option) => {
-      if ('_def' in option) {
-        if ('options' in option._def) {
-          return option._def.options;
-        }
-
-        if ('values' in option._def) {
-          return option._def.options;
-        }
-      }
-    });
-
-    return options as Array<GetOperator<TFilterType>>;
-  }
-
-  if ('values' in shape._def) {
-    return shape._def.values as Array<GetOperator<TFilterType>>;
-  }
-
-  return [];
-}
 
 export function getOperators<TFilterType extends FilterTypes>(
   filterType: TFilterType
 ) {
   // const shape = filterOperatorMap.shape[filterType as NonNestedFilterTypes];
-  const shape = getFilterMapShape(filterType);
+  const shape = getShape(filterType);
 
-  if (shape) {
-    if ('shape' in shape && 'main' in shape.shape) {
-      return getOperatorsHelper(shape.shape.main);
-    }
+  if (shape instanceof ZodEnum) {
+    return shape.options;
+  }
 
-    return getOperatorsHelper(shape);
+  if (shape instanceof ZodUnion) {
+    return shape.options.flatMap(({ _def }) => {
+      if (_def.typeName === 'ZodEnum') {
+        return _def.values;
+      }
+
+      return [];
+    });
   }
 
   throw new DetailedError(

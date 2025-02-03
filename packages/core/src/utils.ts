@@ -1,9 +1,12 @@
 export type JoinPath<K extends string, P extends string> = `${K}.${P}`;
 export type Join<
   T extends Array<unknown>,
-  TDelimiter extends string,
+  TDelimiter extends string
 > = T extends [infer Head extends string, ...infer Rest extends Array<string>]
-  ? `${Head}${Rest['length'] extends 0 ? '' : TDelimiter}${Join<Rest, TDelimiter>}`
+  ? `${Head}${Rest['length'] extends 0 ? '' : TDelimiter}${Join<
+      Rest,
+      TDelimiter
+    >}`
   : '';
 
 export type DeepKeys<T> = T extends object
@@ -22,6 +25,7 @@ export type DeepValueAt<T, P extends DeepKeys<T>> = P extends keyof T
     ? DeepValueAt<T[K], R & DeepKeys<T[K]>>
     : never
   : never;
+type Test = DeepValueAt<{ foo: { bar: { baz: '' } } }, 'foo.bar'>;
 export type Prettify<T> = {
   [K in keyof T]: T[K];
 } & {};
@@ -43,6 +47,10 @@ export type Split<
 > = S extends `${infer Part}${D}${infer Rest}`
   ? [Part, ...Split<Rest, D>]
   : [S];
+export type Includes<
+  T extends string,
+  U extends string
+> = T extends `${infer _Start}${U}${infer _End}` ? true : false;
 
 export function typedEntries<S extends string, T>(
   o: { [s in S]: T } | ArrayLike<T>
