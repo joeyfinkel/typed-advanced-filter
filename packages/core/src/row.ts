@@ -9,8 +9,8 @@ export type NestedFilterTypes = Exclude<FilterTypes, NonNestedFilterTypes>;
 export type FilterTypes = Exclude<
   DeepKeys<FilterOperatorMap>,
   `${string}.main`
-  >;
-export type DateFilterTypes = Extract<FilterTypes, `date.${string}`>
+>;
+export type DateFilterTypes = Extract<FilterTypes, `date.${string}`>;
 export type GetFilterTypeByValue<TValue extends GetOperator = GetOperator> =
   keyof {
     [K in keyof FilterOperatorMap as TValue extends FilterOperatorMap[K]
@@ -99,7 +99,16 @@ export type RowValue<
 > = Omit<RowOptions<TFilterType, TValue, TOperator>, 'value'> & {
   value?: TValue | (string & {});
 };
-export type RowMap<TKeys extends string = string> = Record<TKeys, RowValue>;
+export type RowValueSchema<
+  TFilterType extends FilterTypes = FilterTypes,
+  TValue extends PropertyKey = string
+> = {
+  [Key in TFilterType]: RowValue<Key, TValue, GetOperator<Key>>;
+}[TFilterType];
+export type RowMap<TKeys extends string = string> = Record<
+  TKeys,
+  RowValueSchema
+>;
 export type GetRowMapProps<
   TMap extends RowMap,
   TProp extends keyof TMap[keyof TMap]
@@ -193,23 +202,23 @@ class Rows<TMap extends RowMap>
 
 /**
  * Create filter rows with the given configuration.
+ * @param rows The row configuration.
+ */
+// TODO Autocomplete for the `rows` parameter is not working
+export function createFilterRows<TMap extends RowMap>(rows: TMap): Rows<TMap>;
+/**
+ * Create filter rows with the given configuration.
  * @param keys A list of the row keys to create.
  * @param rows The row configuration. Each row must have a key that matches the key in the `keys` array.
- * @throws {DetailedError} if no {@linkcode rows} is provided.
+ * @throws `DetailedError` if no {@linkcode rows} are provided.
  */
 export function createFilterRows<
   const TKeys extends string,
   TMap extends RowMap<TKeys>
 >(keys: Array<TKeys>, rows: TMap): Rows<TMap>;
-/**
- * Create filter rows with the given configuration.
- * @param rows The row configuration.
- */
-// TODO Autocomplete for the `rows` parameter is not working
-export function createFilterRows<TMap extends RowMap>(rows: TMap): Rows<TMap>;
 export function createFilterRows<
   const TKeys extends string,
-  TMap extends RowMap
+  TMap extends RowMap<TKeys>
 >(rowsOrKeys: TMap | Array<TKeys>, rows?: TMap) {
   if (Array.isArray(rowsOrKeys)) {
     if (!rows) {
