@@ -162,9 +162,16 @@ export function buildRules<
       const validOperators = getOperators(filterType);
 
       if (validOperators) {
+        const formatter = new Intl.ListFormat('en', {
+          type: 'disjunction',
+          style: 'long',
+        });
+
         throw new InvalidOperatorError(
           'buildRules',
-          `${mainMessage}. Valid operators are: ${validOperators.join(', ')}.`
+          `${mainMessage}. Valid operators are: ${formatter.format(
+            validOperators
+          )}.`
         );
       }
 

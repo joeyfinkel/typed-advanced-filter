@@ -66,10 +66,14 @@ export function getExclusive<
     return [...operators];
   }
 
+  const formatter = new Intl.ListFormat('en', {
+    style: 'long',
+    type: 'conjunction',
+  });
   const detailedErrorObj = {
-    operators: [...operators].join(', '),
-    included: [...included].join(', '),
-    omitted: [...omitted].join(', '),
+    operators: formatter.format(operators),
+    included: formatter.format(included),
+    omitted: formatter.format(omitted),
   };
 
   throw new DetailedError(
