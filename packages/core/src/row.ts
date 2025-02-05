@@ -128,59 +128,23 @@ export type Row<TMap extends Partial<RowMap>> = Prettify<
     'rules'
   >
 > & { rules: RuleSchema<FilterTypes> };
-export type GetRow<TMap extends Partial<RowMap>, TKey extends keyof TMap> = Row<
-  Pick<TMap, TKey>
->;
 
-interface CustomRowsArray<TMap extends RowMap> extends Array<Row<TMap>> {
-  findFirst(): Row<TMap> | undefined;
-
-  get<TValue extends keyof TMap, TRow extends Pick<TMap, TValue>>(
-    value: TValue
-  ): Row<TRow> | undefined;
-  get(index: number): Row<TMap> | undefined;
-}
-
-function formatRows<TMap extends RowMap>(map: TMap) {
-  // const rows: Array<Row<TMap>> = [];
-  const rows = new Rows<TMap>();
-
-  for (const [key, { rules: inferredRules, value, ...rest }] of typedEntries(
-    map
-  )) {
-    const rowValue = value ?? key;
-    const rules = buildRules({ filterType: rest.type, rules: inferredRules });
-    const row = {
-      rules,
-      value: rowValue,
-      ...rest,
-    };
-
-    // TODO Fix this 'as any' cast
-    rows.push(row as any);
-  }
-
-  return rows;
-}
-
-class Rows<TMap extends RowMap>
-  extends Array<Row<TMap>>
-  implements CustomRowsArray<TMap>
-{
+class Rows<in out TMap extends RowMap> extends Array<Row<TMap>> {
   /**
    * Gets a row by it's value.
    * @param value The value of the row to get.
    */
-  get<TKey extends keyof TMap, TRow extends Pick<TMap, TKey>>(
-    key: TKey
-  ): Row<TRow> | undefined;
+  // @ts-expect-error - Type 'TMap[TKey]' does not satisfy the constraint 'Partial<RowMap<string>>'.
+  get<TKey extends keyof TMap>(key: TKey): Row<TMap[TKey]> | undefined;
   /**
    * Gets a row at the given index.
    */
   get(index: number): Row<TMap> | undefined;
-  get(param: unknown): Row<TMap> | undefined {
+  get<TKey extends keyof TMap>(param: TKey | number) {
     if (typeof param === 'string') {
-      return this.find(({ value }) => value === param);
+      return this.find(({ value }) => value === param) as  // @ts-expect-error - Type 'TMap[TKey]' does not satisfy the constraint 'Partial<RowMap<string>>'.
+        | Row<TMap[TKey]>
+        | undefined;
     }
 
     if (typeof param === 'number') {
@@ -198,13 +162,33 @@ class Rows<TMap extends RowMap>
   findFirst(): Row<TMap> | undefined {
     return this[0];
   }
+
+  static format<TMap extends RowMap>(rowMap: TMap) {
+    const rows = new Rows<TMap>();
+
+    for (const [key, { rules: inferredRules, value, ...rest }] of typedEntries(
+      rowMap
+    )) {
+      const rowValue = value ?? key;
+      const rules = buildRules({ filterType: rest.type, rules: inferredRules });
+      const row = {
+        rules,
+        value: rowValue,
+        ...rest,
+      };
+
+      // TODO Fix this 'as any' cast
+      rows.push(row as any);
+    }
+
+    return rows;
+  }
 }
 
 /**
  * Create filter rows with the given configuration.
  * @param rows The row configuration.
  */
-// TODO Autocomplete for the `rows` parameter is not working
 export function createFilterRows<TMap extends RowMap>(rows: TMap): Rows<TMap>;
 /**
  * Create filter rows with the given configuration.
@@ -228,8 +212,8 @@ export function createFilterRows<
       );
     }
 
-    return formatRows(rows);
+    return Rows.format(rows);
   }
 
-  return formatRows(rowsOrKeys);
+  return Rows.format(rowsOrKeys);
 }
