@@ -2,12 +2,12 @@ import { DetailedError } from './errors/detailedError';
 import { InvalidOperatorError } from './errors/invalidOperator';
 import { GetOperator, getOperators, isValidOperator } from './operators';
 import { FilterTypes } from './row';
-import { removeKeys, typedEntries } from './utils';
+import { entries, removeKeys, typedEntries } from './utils';
 
 export type BaseRuleOptions<
   TFilterType extends FilterTypes,
   TValue extends GetOperator<TFilterType>,
-  TOptionalValue extends boolean
+  TOptionalValue extends boolean,
 > = {
   text: string;
   /**
@@ -28,15 +28,21 @@ export type BaseRuleOptions<
   siblings?: Array<NoInfer<RuleSchema<TFilterType, TValue, TOptionalValue>>>;
 };
 export type RuleSchema<
-  TFilterType extends FilterTypes,
+  TFilterType extends FilterTypes = FilterTypes,
   TOperator extends GetOperator<TFilterType> = GetOperator<TFilterType>,
-  TOptionalValue extends boolean = true
+  TOptionalValue extends boolean = true,
 > = BaseRuleOptions<TFilterType, TOperator, TOptionalValue> &
-  (TOptionalValue extends true ? { value?: TOperator } : { value: TOperator });
+  (TOptionalValue extends true
+    ? {
+        value?: TOperator;
+      }
+    : {
+        value: TOperator;
+      });
 export type Rule<
   TFilterType extends FilterTypes,
   TValue extends GetOperator<TFilterType> = GetOperator<TFilterType>,
-  TOptionalValue extends boolean = true
+  TOptionalValue extends boolean = true,
 > = string | RuleSchema<TFilterType, TValue, TOptionalValue>;
 // export type RuleBuilderFn<
 //   TFilterType extends FilterTypes,
@@ -47,7 +53,7 @@ export type Rule<
 // };
 export type RuleMap<
   TFilterType extends FilterTypes,
-  TOperator extends GetOperator<TFilterType>
+  TOperator extends GetOperator<TFilterType>,
 > = {
   [Op in TOperator]?: Rule<TFilterType, TOperator>;
   // | RuleBuilderFn<TFilterType, TOperator>;
@@ -55,7 +61,7 @@ export type RuleMap<
 type BuildRuleOptions<
   TFilterType extends FilterTypes,
   TOperator extends GetOperator<TFilterType>,
-  TRule extends Rule<TFilterType, TOperator>
+  TRule extends Rule<TFilterType, TOperator>,
 > = {
   filterType: TFilterType;
   operator: TOperator;
@@ -64,7 +70,7 @@ type BuildRuleOptions<
 
 export function isRuleSchema<
   TFilterType extends FilterTypes,
-  TOperator extends GetOperator<TFilterType>
+  TOperator extends GetOperator<TFilterType>,
 >(value: unknown): value is RuleSchema<TFilterType, TOperator> {
   if (typeof value === 'object' && value) {
     // Check for the only required property.
@@ -89,7 +95,7 @@ export function isRuleSchema<
 
 export function isRule<
   TFilterType extends FilterTypes,
-  TOperator extends GetOperator<TFilterType>
+  TOperator extends GetOperator<TFilterType>,
 >(value: unknown): value is Rule<TFilterType, TOperator> {
   if (typeof value === 'string') {
     return true;
@@ -101,7 +107,7 @@ export function isRule<
 export function buildRule<
   TFilterType extends FilterTypes,
   TOperator extends GetOperator<TFilterType>,
-  TRule extends Rule<TFilterType, TOperator>
+  TRule extends Rule<TFilterType, TOperator>,
 >(
   options: BuildRuleOptions<TFilterType, TOperator, TRule>
 ): RuleSchema<TFilterType, TOperator> {
@@ -128,7 +134,7 @@ export function buildRule<
 export type BuildRulesOptions<
   TFilterType extends FilterTypes,
   TOperator extends GetOperator<TFilterType>,
-  TRulesMap extends RuleMap<TFilterType, TOperator>
+  TRulesMap extends RuleMap<TFilterType, TOperator>,
 > = {
   filterType: TFilterType;
   rules: TRulesMap;
@@ -140,7 +146,7 @@ export type BuildRulesOptions<
 export function buildRules<
   TFilterType extends FilterTypes,
   TOperator extends GetOperator<TFilterType>,
-  TRulesMap extends RuleMap<TFilterType, TOperator>
+  TRulesMap extends RuleMap<TFilterType, TOperator>,
 >(options: BuildRulesOptions<TFilterType, TOperator, TRulesMap>) {
   const { filterType, rules, transformer } = options;
   let rulesMap = rules;
@@ -154,9 +160,50 @@ export function buildRules<
     rulesMap = removeKeys(rulesMap, removedKeys);
   }
 
-  const entries = typedEntries(rulesMap);
+  const detailedError = new DetailedError('buildRules');
 
-  return entries.map(([key, value]) => {
+  // for (const [key, value] of entries(rulesMap)) {
+  //   if (typeof key !== 'string') {
+  //     throw detailedError.error(
+  //       `key "${String(key)}" must be a string. It is currently a ${typeof key}`
+  //     );
+  //   }
+
+  //   if (!isValidOperator(filterType, key)) {
+  //     const mainMessage = `Operator "${key}". is not valid for row type of "${filterType}"`;
+  //     const validOperators = getOperators(filterType);
+
+  //     if (validOperators) {
+  //       const formatter = new Intl.ListFormat('en', {
+  //         type: 'disjunction',
+  //         style: 'long',
+  //       });
+
+  //       throw new InvalidOperatorError(
+  //         'buildRules',
+  //         `${mainMessage}. Valid operators are: ${formatter.format(
+  //           validOperators
+  //         )}.`
+  //       );
+  //     }
+
+  //     throw new InvalidOperatorError('buildRules', `${mainMessage}.`);
+  //   }
+
+  //   if (!value) {
+  //     throw detailedError.error(`Row value not found for ${key}.`);
+  //   }
+  // }
+
+  // return rulesMap
+
+  return entries(rulesMap).map(([key, value]) => {
+    if (typeof key !== 'string') {
+      throw detailedError.error(
+        `key "${String(key)}" must be a string. It is currently a ${typeof key}`
+      );
+    }
+
     if (!isValidOperator(filterType, key)) {
       const mainMessage = `Operator "${key}". is not valid for row type of "${filterType}"`;
       const validOperators = getOperators(filterType);
@@ -179,7 +226,7 @@ export function buildRules<
     }
 
     if (!value) {
-      throw new DetailedError('buildRules', `Row value not found for ${key}.`);
+      throw detailedError.error(`Row value not found for ${key}.`);
     }
 
     return buildRule({

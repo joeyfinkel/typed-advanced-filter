@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { GetOperator } from './operators';
 import { DateFilterTypes } from './row';
 import { buildRule, buildRules, RuleMap, RuleSchema } from './rule';
@@ -20,7 +21,7 @@ export type CreateDateOptions<
   TRuleMap extends RuleMap<`date.${TFilterType}`, TInclude> = RuleMap<
     `date.${TFilterType}`,
     TInclude
-  >
+  >,
 > = Omit<
   OmitOrIncludeOptions<`date.${TFilterType}`, TOmit, TInclude>,
   'filterType'
@@ -72,6 +73,51 @@ export const dateFilterOptions: {
   'date.days.weekdays': weekdayOptions,
   'date.days.weekends': weekendOptions,
 };
+export const months = z.enum([
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]);
+export const customDate = z.string().refine(
+  (value) => {
+    const [month, day, year] = value.split(/[, ]+/);
+
+    if (!month || !day || !year) {
+      return false;
+    }
+
+    if (!months.options.includes(month as z.infer<typeof months>)) {
+      return false;
+    }
+
+    const dayNumber = parseInt(day, 10);
+    const yearNumber = parseInt(year, 10);
+
+    if (isNaN(dayNumber) || isNaN(yearNumber)) {
+      return false;
+    }
+
+    return true;
+  },
+  {
+    message: 'Invalid date format',
+  }
+) as z.ZodSchema<`${z.infer<typeof months>}, ${number}, ${number}`>;
+
+export function isCustomDate(
+  value: string
+): value is z.infer<typeof customDate> {
+  return customDate.safeParse(value).success;
+}
 
 export function createDateOptions<
   TFilterType extends CompactDateOptions,
@@ -84,7 +130,7 @@ export function createDateOptions<
   TRuleMap extends RuleMap<`date.${TFilterType}`, TInclude> = RuleMap<
     `date.${TFilterType}`,
     TInclude
-  >
+  >,
 >(
   options: CreateDateOptions<TFilterType, TOperator, TOmit, TInclude, TRuleMap>
 ) {

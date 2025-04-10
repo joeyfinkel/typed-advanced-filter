@@ -18,7 +18,7 @@ export type ExcludeOmitted<TInclude, TOmit> = TInclude extends TOmit
 export type OmitOrIncludeOptions<
   TFilterType extends FilterTypes,
   TOmit extends GetOperator<TFilterType> = never,
-  TInclude extends GetOperator<TFilterType> = GetOperator<TFilterType>
+  TInclude extends GetOperator<TFilterType> = GetOperator<TFilterType>,
 > = {
   filterType: TFilterType;
   /**
@@ -38,12 +38,13 @@ export function getExclusive<
   TInclude extends ExcludeOmitted<TOperator, TOmit> = ExcludeOmitted<
     TOperator,
     TOmit
-  >
+  >,
 >(options: OmitOrIncludeOptions<TFilterType, TOmit, TInclude>) {
   const { filterType, include, omit } = options;
+  const detailedError = new DetailedError('getExclusive');
 
   if (!filterType) {
-    throw new DetailedError('getExclusive', '`filterType` is required.');
+    throw detailedError.error('`filterType` is required.');
   }
 
   const operators = new Set([...getOperators(filterType)]);
@@ -76,8 +77,7 @@ export function getExclusive<
     omitted: formatter.format(omitted),
   };
 
-  throw new DetailedError(
-    'getExclusive',
+  throw detailedError.error(
     `An error occurred. Data: ${JSON.stringify(detailedErrorObj)}`
   );
 }

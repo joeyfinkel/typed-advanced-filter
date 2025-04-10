@@ -17,6 +17,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@tanstack/store": "^0.7.0",
     "zod": "^3.24.1"
   }
 }
