@@ -25,7 +25,11 @@ import {
   typedJoin,
   UnionToIntersection,
 } from './utils';
-import { deepAddProperties } from './filter/utils';
+import {
+  addProperties,
+  AddPropertiesResult,
+  DeepKeysOfObjectsOnly,
+} from './filter/utils';
 
 export type FilterOptions<
   TRowMap extends RowMap,
@@ -844,6 +848,13 @@ export type CreateFilterOptions1<
 export type QueryString<TRowMap extends RowMap> = {
   [Key in keyof RowFilterMap<TRowMap>]: string;
 };
+type CreateQueryStringResult<
+  TRowMap extends RowMap,
+  TFilterMap extends RowFilterMap<TRowMap>,
+> = {
+  filters: AddPropertiesResult<TFilterMap, { queryString: string }>;
+  queryString: string;
+};
 
 export class RowFilter<TRowMap extends RowMap> {
   private rowMap!: TRowMap;
@@ -1093,6 +1104,7 @@ export class RowFilter<TRowMap extends RowMap> {
     options: Omit<CreateFilterOptions1<TRowMap, TFilterMap>, 'filterMap'> & {
       logicalOperator?: keyof TFilterMap;
       filterMap: TFilterMap;
+      currentPathSegments?: Array<DeepKeysOfObjectsOnly<TFilterMap>>;
     }
   ) {
     const allOperators = this.getFilterMapOperators<TFilterMap>(filterMapValue);
@@ -1103,12 +1115,16 @@ export class RowFilter<TRowMap extends RowMap> {
       includeParenthesis,
       queryStringTransformer,
       filterMap,
+      currentPathSegments = [logicalOperator],
     } = options;
     const transformedQueryStrings = {} as Record<keyof TRowMap, unknown>;
-    let filterMapTransformed = deepAddProperties(filterMap, {
-      additionalProperties: { queryString: '' },
-      skipMergeIfKeysPresent: [String(logicalOperator)],
-    });
+    let transformedFilterMap = { ...filterMap };
+    // let filterMapTransformed = addProperties({
+    //   source: filterMap,
+    //   // source: filterMapValue,
+    //   additionalProperties: { queryString: '' },
+    //   ignore: [String(logicalOperator)],
+    // });
     let queryString = '';
     let index = 0;
     let transformed = { ...filterMapValue };
@@ -1122,9 +1138,10 @@ export class RowFilter<TRowMap extends RowMap> {
     // this.queryStrings1.setState(() => filterMapValue);
 
     for (const [key, data] of filterEntries) {
-      const field = String(key);
+      const currentKeyString = String(key);
 
       if (this.isRowFilterFieldMap(key, data)) {
+        const field = currentKeyString;
         const { operator, value } = data;
         const symbol =
           symbols?.globals?.[
@@ -1174,84 +1191,39 @@ export class RowFilter<TRowMap extends RowMap> {
         //   });
         // }
 
-        if (operator === 'between') {
-          if (!Array.isArray(value)) {
-            throw this.detailedError.error(
-              'Operator "between" requires a tuple of values for the `value` prop ([value1, value2])'
-            );
-          }
+        const propertyPathSegments = [...currentPathSegments, field].join(
+          '.'
+        ) as DeepKeysOfObjectsOnly<TFilterMap>;
 
-          const [value1, value2] = value;
+        addProperties({
+          source: transformedFilterMap,
+          additionalProperties: () => {
+            if (operator === 'between') {
+              if (!Array.isArray(value)) {
+                throw this.detailedError.error(
+                  'Operator "between" requires a tuple of values for the `value` prop ([value1, value2])'
+                );
+              }
 
-          this.addQueryString({
-            field,
-            operator,
-            value: `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
-            order: `${index}.${0}`,
-          });
+              const [value1, value2] = value;
 
-          queryString += `${field} ${symbol ?? 'is between'} '${value1}' and '${value2}'`;
-          this.queryStrings1.setState((prev) => ({
-            ...prev,
-            [String(logicalOperator)]: {
-              [field]: {
-                operator,
-                value,
+              return {
                 queryString: `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
-              },
-            },
-          }));
+              };
+            }
 
-          // TODO create function that will take in: some data (T), a search for object (which would find the matching **deep** object based on "best match"), and some new data that should be added to that object
-          // examples:
-          //  deepAdd(filterMapTransformed, {[field]: {operator, value}}, {queryString: 'some string here'})
-
-          if (logicalOperator && logicalOperator in filterMapTransformed) {
-            const logicalOperatorKey =
-              logicalOperator as keyof typeof filterMapTransformed;
-            const fieldKey =
-              field as keyof (typeof filterMapTransformed)[typeof logicalOperatorKey];
-            filterMapTransformed[logicalOperatorKey][fieldKey].queryString =
-              `${symbol ?? 'is between'} '${value1}' and '${value2}'`;
-          } else {
-          }
-        } else if (isEmptyOperator(operator)) {
-          this.addQueryString({
-            field,
-            operator,
-            value: `${symbol ?? operator}'`,
-            order: `${index}.${0}`,
-          });
-          queryString += `${field} ${symbol ?? operator}`;
-          this.queryStrings1.setState((prev) => ({
-            ...prev,
-            [String(logicalOperator)]: {
-              [field]: {
-                operator,
-                value,
+            if (isEmptyOperator(operator)) {
+              return {
                 queryString: `${field} ${symbol ?? operator}`,
-              },
-            },
-          }));
-        } else {
-          this.addQueryString({
-            field,
-            operator,
-            value: `${symbol ?? operator} '${value}'`,
-            order: `${index}.${0}`,
-          });
-          queryString += `${field} ${symbol ?? operator} '${value}'`;
-          this.queryStrings1.setState((prev) => ({
-            ...prev,
-            [String(logicalOperator)]: {
-              [field]: {
-                operator,
-                value,
-                queryString: `${field} ${symbol ?? operator} '${value}'`,
-              },
-            },
-          }));
-        }
+              };
+            }
+
+            return {
+              queryString: `${field} ${symbol ?? operator} '${value}'`,
+            };
+          },
+          applyTo: [propertyPathSegments],
+        } as const);
 
         // Append the logical operator when we're not on the last filter
         if (
@@ -1283,12 +1255,16 @@ export class RowFilter<TRowMap extends RowMap> {
       }
 
       if (isLogicalOperator(key)) {
-        const { logicalOperator, ...rest } = options;
+        const { logicalOperator, currentPathSegments: _, ...rest } = options;
         const op = symbols?.logicalOperators?.[key] ?? key.toUpperCase();
+        const nextPathSegments = [...currentPathSegments, currentKeyString];
         const newQueryString = this.createQueryString(
           data as RowFilterFieldMap<TRowMap>,
           {
             logicalOperator: key,
+            currentPathSegments: nextPathSegments as Array<
+              DeepKeysOfObjectsOnly<TFilterMap>
+            >,
             ...rest,
           }
         );
@@ -1342,9 +1318,8 @@ export class RowFilter<TRowMap extends RowMap> {
 
     // const t1 = queryStrings.state;
     return {
+      filterMap: transformedFilterMap,
       queryString,
-      queryStrings: this.queryStrings.state,
-      qs: this.queryStrings1.state,
     };
   }
 
@@ -1363,10 +1338,6 @@ export class RowFilter<TRowMap extends RowMap> {
     }
 
     const [logicalOperator, rowFilterMapValue] = entries(filterMap)[0];
-    console.log({
-      filterMap,
-      constructedMap: { [logicalOperator]: rowFilterMapValue },
-    });
 
     if (typeof logicalOperator !== 'string') {
       throw this.detailedError.error(
@@ -1386,7 +1357,7 @@ export class RowFilter<TRowMap extends RowMap> {
       );
     }
 
-    const { queryString, queryStrings, qs } = this.createQueryString(
+    const { queryString, filterMap: result } = this.createQueryString(
       rowFilterMapValue as RowFilterMapValue<TRowMap>,
       {
         logicalOperator,
@@ -1394,8 +1365,6 @@ export class RowFilter<TRowMap extends RowMap> {
         ...rest,
       }
     );
-
-    console.log({ qs });
 
     // const queryString = entries(filterMap)
     //   .map(([logicalOperator, rowFilterMapValue]) => {
@@ -1424,6 +1393,12 @@ export class RowFilter<TRowMap extends RowMap> {
     //   })
     //   .join('');
 
-    return { filters: filterMap, queryString };
+    return {
+      filters: result /*as AddPropertiesResult<
+        TFilterMap,
+        { queryString: string }
+      >*/,
+      queryString,
+    };
   }
 }

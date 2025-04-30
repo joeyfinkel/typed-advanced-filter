@@ -1,106 +1,169 @@
-/**
- * Checks if a value is a plain object (e.g., created via {} or new Object()).
- * Excludes arrays, null, and class instances.
- * @param value - The value to check.
- * @returns True if the value is a plain object, false otherwise.
- */
-function isPlainObject(value: unknown): value is Record<string, any> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+import { Prettify } from '../utils';
+
+export type DeepKeysOfObjectsOnly<T> = {
+  [K in keyof T]: T[K] extends object
+    ? T[K] extends Array<any> | Function
+      ? never
+      : K extends string
+        ? K | `${K}.${DeepKeysOfObjectsOnly<T[K]>}`
+        : never
+    : never;
+}[keyof T];
+type AdditionalObject<T> = T extends (...args: any[]) => infer R ? R : T;
+type AddPropertyOptions<
+  TSource extends object,
+  TAdditional extends object | (() => object),
+  TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+  TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+> = {
+  source: TSource;
+  additionalProperties: TAdditional;
+} & (
+  | {
+      /**
+       * Array of keys to apply the `additionalProperties` to.
+       */
+      applyTo?: TApplyTo;
+    }
+  | {
+      /**
+       * Array of keys to ignore when applying the `additionalProperties`.
+       */
+      ignore?: TIgnore;
+    }
+);
+
+type JoinPath<T extends string[], Acc extends string = ''> = T extends [
+  infer F extends string,
+  ...infer R extends string[],
+]
+  ? JoinPath<R, Acc extends '' ? F : `${Acc}.${F}`>
+  : Acc;
+
+// Helper: Should we add TAdditional at this path?
+type ShouldAdd<
+  Path extends string,
+  TApplyTo extends string[],
+  TIgnore extends string[],
+> = TIgnore extends [any, ...any]
+  ? Path extends TIgnore[number]
+    ? false
+    : true
+  : TApplyTo extends [any, ...any]
+    ? Path extends TApplyTo[number]
+      ? true
+      : false
+    : true;
+
+// Main recursive type
+type AddPropertiesResultHelper<
+  TSource,
+  TAdditional,
+  TApplyTo extends string[],
+  TIgnore extends string[],
+  Path extends string[] = [],
+> = TSource extends object
+  ? TSource extends Array<any>
+    ? TSource // Don't add to arrays
+    : TSource extends Date
+      ? TSource
+      : Prettify<
+          {
+            [K in keyof TSource]: AddPropertiesResultHelper<
+              TSource[K],
+              TAdditional,
+              TApplyTo,
+              TIgnore,
+              [...Path, K & string]
+            >;
+          } & (ShouldAdd<JoinPath<Path>, TApplyTo, TIgnore> extends true
+            ? AdditionalObject<TAdditional>
+            : {})
+        >
+  : TSource;
+
+export type AddPropertiesResult<
+  TSource extends object,
+  TAdditional extends object,
+  TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+  TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+> = AddPropertiesResultHelper<
+  TSource,
+  TAdditional,
+  TApplyTo extends string[] ? TApplyTo : [],
+  TIgnore extends string[] ? TIgnore : [],
+  []
+>;
+
+function isPathInList<TSource extends object>(
+  path: string,
+  list?: Array<DeepKeysOfObjectsOnly<TSource>>
+) {
+  if (!list || list.length === 0) {
     return false;
   }
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
+
+  return list.some((item) => item === path);
 }
 
-/** Helper type to check if an object T has any keys that are also in K */
-type HasKeyFrom<T, K extends ReadonlyArray<PropertyKey>> = keyof T &
-  K[number] extends never
-  ? false
-  : true;
+export function addProperties<
+  TSource extends object,
+  TAdditional extends object | (() => object),
+  TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+  TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+>(options: AddPropertyOptions<TSource, TAdditional, TApplyTo, TIgnore>) {
+  const { source, additionalProperties } = options;
+  let applyTo: Array<DeepKeysOfObjectsOnly<TSource>> = [];
+  let ignore: Array<DeepKeysOfObjectsOnly<TSource>> = [];
 
-/**
- * Recursive Mapped Type: Defines the structure of T after conditionally merging U
- * into nested objects based on the presence of keys from K.
- */
-type DeepMergeConditional<T, U, K extends ReadonlyArray<PropertyKey>> =
-  // Check if T is structurally like a plain object (indexable)
-  T extends Record<string | number | symbol, any>
-    ? // Check if T itself is a plain object (runtime check approximation)
-      // We primarily rely on the runtime isPlainObject, this helps typing
-      T extends ReadonlyArray<any> // Exclude arrays explicitly
-      ? T // Return arrays as-is
-      : HasKeyFrom<T, K> extends true // Does the *current* object T have a skip key?
-        ? // Yes: Skip merge for this object, just recurse on its properties
-          { [P in keyof T]: DeepMergeConditional<T[P], U, K> }
-        : // No: Merge U into this object and recurse on its properties
-          { [P in keyof T]: DeepMergeConditional<T[P], U, K> } & U
-    : // Not an object-like structure (primitive, function, etc.), return as is
-      T;
-
-export function deepAddProperties<
-  T extends object,
-  U extends object,
-  K extends ReadonlyArray<string | number | symbol> = [],
->(
-  data: T,
-  options: {
-    additionalProperties: U;
-    skipMergeIfKeysPresent?: K;
+  if ('applyTo' in options && options.applyTo) {
+    applyTo = options.applyTo;
   }
-): DeepMergeConditional<T, U, K> {
-  const skipKeysSet = new Set(options.skipMergeIfKeysPresent ?? []);
-  const additionalProps = options.additionalProperties;
 
-  function deepProcess(currentData: any): any {
-    // Base case 1: Not an object or is null, return directly
-    if (typeof currentData !== 'object' || currentData === null) {
-      return currentData;
-    }
+  if ('ignore' in options && options.ignore) {
+    ignore = options.ignore;
+  }
 
-    // Base case 2: Handle arrays - process elements recursively but don't merge props
-    if (Array.isArray(currentData)) {
-      // Important: Create a new array
-      return currentData.map((item) => deepProcess(item));
-    }
-
-    // Base case 3: Not a plain object (e.g., Date, RegExp), return as is
-    if (!isPlainObject(currentData)) {
-      return currentData;
-    }
-
-    // --- Process Plain Object ---
-
-    // Process children first recursively into a new object
-    const processedChildren: Record<string, any> = {};
-    for (const key in currentData) {
-      if (Object.prototype.hasOwnProperty.call(currentData, key)) {
-        processedChildren[key] = deepProcess(currentData[key]); // Recurse
+  // Recursive function to traverse and add properties
+  function traverseAndAddProperties<T>(obj: T, currentPath = '') {
+    for (const key in obj) {
+      if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+        continue;
       }
-    }
 
-    // Check if the *original* currentData contains any skip keys
-    let shouldSkipMerge = false;
-    if (skipKeysSet.size > 0) {
-      for (const key in currentData) {
-        if (
-          Object.prototype.hasOwnProperty.call(currentData, key) &&
-          skipKeysSet.has(key)
-        ) {
-          shouldSkipMerge = true;
-          break;
+      const fullPath = currentPath ? `${currentPath}.${key}` : key;
+
+      // Skip if in ignore list
+      if (isPathInList(fullPath, ignore)) {
+        continue;
+      }
+
+      const value = obj[key];
+
+      // Only process if value is an object (not null, not array)
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        // Determine if we should add properties here
+        const shouldAdd =
+          applyTo.length > 0 ? isPathInList(fullPath, applyTo) : true; // If no applyTo, add to all non-ignored objects
+
+        if (shouldAdd) {
+          obj[key] = {
+            ...value,
+            ...additionalProperties,
+          };
         }
-      }
-    }
 
-    // Return processed children, merging additionalProps only if not skipped
-    if (shouldSkipMerge) {
-      return processedChildren; // Return only the processed children
-    } else {
-      // Return processed children merged with additional properties
-      return { ...processedChildren, ...additionalProps };
+        // Recurse into nested object
+        traverseAndAddProperties(obj[key], fullPath);
+      }
     }
   }
 
-  // Start recursion. Assert type as TS struggles to verify against complex mapped types.
-  return deepProcess(data) as DeepMergeConditional<T, U, K>;
+  traverseAndAddProperties(source);
+
+  return source as AddPropertiesResult<TSource, TAdditional, TApplyTo, TIgnore>;
 }
