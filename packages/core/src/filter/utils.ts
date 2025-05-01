@@ -1,4 +1,4 @@
-import { Prettify } from '../utils';
+import { DeepMutable, Prettify } from '../utils';
 
 export type DeepKeysOfObjectsOnly<T> = {
   [K in keyof T]: T[K] extends object
@@ -87,12 +87,14 @@ export type AddPropertiesResult<
   TAdditional extends object,
   TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
   TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
-> = AddPropertiesResultHelper<
-  TSource,
-  TAdditional,
-  TApplyTo extends string[] ? TApplyTo : [],
-  TIgnore extends string[] ? TIgnore : [],
-  []
+> = DeepMutable<
+  AddPropertiesResultHelper<
+    TSource,
+    TAdditional,
+    TApplyTo extends string[] ? TApplyTo : [],
+    TIgnore extends string[] ? TIgnore : [],
+    []
+  >
 >;
 
 function isPathInList<TSource extends object>(
@@ -107,10 +109,10 @@ function isPathInList<TSource extends object>(
 }
 
 export function addProperties<
-  TSource extends object,
-  TAdditional extends object | (() => object),
-  TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
-  TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+  const TSource extends object,
+  const TAdditional extends object | (() => object),
+  const TApplyTo extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
+  const TIgnore extends Array<DeepKeysOfObjectsOnly<TSource>> = [],
 >(options: AddPropertyOptions<TSource, TAdditional, TApplyTo, TIgnore>) {
   const { source, additionalProperties } = options;
   let applyTo: Array<DeepKeysOfObjectsOnly<TSource>> = [];
@@ -153,7 +155,9 @@ export function addProperties<
         if (shouldAdd) {
           obj[key] = {
             ...value,
-            ...additionalProperties,
+            ...(typeof additionalProperties === 'function'
+              ? additionalProperties()
+              : additionalProperties),
           };
         }
 

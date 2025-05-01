@@ -90,19 +90,29 @@ const createdFilters = rows.createFilter({
             operator: 'between',
             value: ['monday', 'wednesday'],
           },
+          or: {
+            total: {
+              operator: 'gte',
+              value: 1,
+            },
+          },
         },
       },
     },
   },
   queryStringTransformer: {
-    total({ field, operators: { eq }, queryString }) {
-      return { eq: '' };
-    },
-    createdAt({ field, queryString, operators: { gt, between, eq } }) {
+    total({ field, operators: { eq } }) {
+      // return { eq: `this is eq (${eq}) for ${field}` };
+      console.log(eq)
       return {
-        between: 'this is between',
-        eq: 'this is eq',
-        gt: 'this is gt',
+        'and.or.total.eq': `This is eq ${eq.value} for ${field}`,
+      };
+    },
+    createdAt({ field, operators: { gt, between, eq } }) {
+      return {
+        'and.or.and.createdAt.between': 'this is between',
+        'and.or.createdAt.eq': 'this is eq',
+        'and.createdAt.gt': 'this is gt',
       };
     },
     // name({ field, operators: { contains }, queryString }) {

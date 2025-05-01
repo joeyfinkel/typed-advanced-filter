@@ -32,6 +32,64 @@ export type DeepKeys<T> = T extends object
         : never;
     }[keyof T]
   : never;
+// export type DeepKeyAt<TData, TKey, Path extends string = ''> = {
+//   [P in keyof TData]: P extends string
+//     ? P extends TKey
+//       ? Path extends ''
+//         ? P
+//         : `${Path}.${P}`
+//       : TData[P] extends object
+//         ? DeepKeyAt<TData[P], TKey, Path extends '' ? P : `${Path}.${P}`>
+//         : never
+//     : never;
+// }[keyof TData];
+// export type DeepKeyAt<
+//   T,
+//   K extends string,
+//   V = unknown,
+//   Path extends string = ''
+// > = {
+//   [P in keyof T]:
+//     P extends string
+//       ? P extends K
+//         ? V extends unknown
+//           ? (Path extends '' ? P : `${Path}.${P}`)
+//           : (T[P] extends V
+//               ? (Path extends '' ? P : `${Path}.${P}`)
+//               : never)
+//         : T[P] extends object
+//           ? DeepKeyAt<
+//               T[P],
+//               K,
+//               V,
+//               Path extends '' ? P : `${Path}.${P}`
+//             >
+//           : never
+//       : never
+// }[keyof T];
+export type DeepKeyAt<
+  T,
+  K extends string,
+  Suffix extends string = '',
+  Path extends string = ''
+> = {
+  [P in keyof T]:
+    P extends string
+      ? P extends K
+        ? Suffix extends ''
+          ? (Path extends '' ? P : `${Path}.${P}`)
+          : (Path extends '' ? `${P}.${Suffix}` : `${Path}.${P}.${Suffix}`)
+        : T[P] extends object
+          ? DeepKeyAt<
+              T[P],
+              K,
+              Suffix,
+              Path extends '' ? P : `${Path}.${P}`
+            >
+          : never
+      : never
+}[keyof T];
+
 export type DeepValueAt<T, P extends DeepKeys<T>> = P extends keyof T
   ? T[P]
   : P extends `${infer K}.${infer R}`
@@ -78,6 +136,15 @@ export type RemovePrefix<
 export type Entry<T> = [keyof T, T[keyof T]];
 export type Entries<T> = Array<Entry<T>>;
 export type GetKey<T> = keyof T;
+export type DeepMutable<T> = T extends (...args: any[]) => any
+  ? T // Leave functions as-is
+  : T extends ReadonlyArray<infer U>
+    ? DeepMutableArray<U>
+    : T extends object
+      ? { -readonly [P in keyof T]: DeepMutable<T[P]> }
+      : T;
+
+interface DeepMutableArray<T> extends Array<DeepMutable<T>> {}
 
 // export function typedEntries<T>(o: T | ArrayLike<T>): Entries<T>;
 export function typedEntries<T, S extends keyof T>(
@@ -178,7 +245,7 @@ export function deepReplace<T>(
   }
 
   // Handle objects
-  if (typeof obj === "object") {
+  if (typeof obj === 'object') {
     const newObj = {} as T;
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {

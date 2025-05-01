@@ -1,5 +1,8 @@
-import { Store } from '@tanstack/store';
 import { DetailedError } from './errors/detailedError';
+import {
+  addProperties,
+  DeepKeysOfObjectsOnly
+} from './filter/utils';
 import {
   BasicDateOperators,
   CreateOperatorMap,
@@ -14,22 +17,14 @@ import {
 } from './operators';
 import { FilterTypes, NonNestedFilterTypes, RowMap } from './row';
 import {
-  deepMerge,
   EnsureIs,
-  Entries,
   entries,
-  Entry,
   Join,
   Prettify,
   StringReplace,
   typedJoin,
   UnionToIntersection,
 } from './utils';
-import {
-  addProperties,
-  AddPropertiesResult,
-  DeepKeysOfObjectsOnly,
-} from './filter/utils';
 
 export type FilterOptions<
   TRowMap extends RowMap,
@@ -372,298 +367,6 @@ export function isFilter<
   return !isFilterMap(value);
 }
 
-type FilterConditionValue<
-  TRowMap extends RowMap = RowMap,
-  TField extends keyof TRowMap = keyof TRowMap,
-  TOperator extends
-    keyof TRowMap[TField]['rules'] = keyof TRowMap[keyof TRowMap]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = GetTypeFromFunctionTypeMap<TRowMap[keyof TRowMap]['type']>,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = never,
-> = TValue extends never
-  ? {}
-  : TOperator extends 'between'
-    ? { values: [TValue, TAdditionalValue] }
-    : { value: TValue };
-// Error: Circular reference
-type FilterCondition<
-  TRowMap extends RowMap = RowMap,
-  TField extends keyof TRowMap = keyof TRowMap,
-  TOperator extends
-    keyof TRowMap[TField]['rules'] = keyof TRowMap[keyof TRowMap]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = GetTypeFromFunctionTypeMap<TRowMap[keyof TRowMap]['type']>,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = never,
-> = {
-  [Key in TField]: Prettify<
-    FilterConditionValue<
-      TRowMap,
-      TField,
-      TOperator,
-      TValue,
-      TAdditionalValue
-    > & {
-      operator: TOperator;
-      type: TRowMap[TField]['type'];
-    }
-  >;
-};
-
-// type FilterGroup<
-//   TLogicalOperator extends LogicalOperator = LogicalOperator,
-//   TRowMap extends RowMap = RowMap,
-//   TField extends keyof TRowMap = keyof TRowMap,
-//   TOperator extends
-//     keyof TRowMap[TField]['rules'] = keyof TRowMap[keyof TRowMap]['rules'],
-//   TValue extends GetTypeFromFunctionTypeMap<
-//     TRowMap[TField]['type']
-//   > = GetTypeFromFunctionTypeMap<TRowMap[keyof TRowMap]['type']>,
-//   TAdditionalValue extends GetTypeFromFunctionTypeMap<
-//     TRowMap[TField]['type']
-//   > = never,
-//   TConditions extends FilterCondition<
-//     TRowMap,
-//     TField,
-//     TOperator,
-//     TValue,
-//     TAdditionalValue
-//   > = FilterCondition<TRowMap, TField, TOperator, TValue, TAdditionalValue>,
-// > = {
-//   operator: TLogicalOperator;
-//   conditions: TConditions;
-// };
-
-type FilterGroup<
-  TLogicalOperator extends LogicalOperator = LogicalOperator,
-  TRowMap extends RowMap = RowMap,
-> = Record<TLogicalOperator, { conditions: FilterCondition }>;
-type DefaultFilterGroup<
-  Key extends string,
-  TRowMap extends RowMap = RowMap,
-  TField extends keyof TRowMap = keyof TRowMap,
-  TOperator extends
-    keyof TRowMap[TField]['rules'] = keyof TRowMap[keyof TRowMap]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = GetTypeFromFunctionTypeMap<TRowMap[keyof TRowMap]['type']>,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<
-    TRowMap[TField]['type']
-  > = never,
-> = {
-  [x in Key]: {
-    conditions: FilterCondition<
-      TRowMap,
-      TField,
-      TOperator,
-      TValue,
-      TAdditionalValue
-    >;
-  };
-};
-
-type GetConditionFromFilterGroup<Group extends FilterGroup> =
-  Group[keyof Group] extends { conditions: infer C } ? C : never;
-
-type JoinFilterGroups<
-  Group1 extends FilterGroup,
-  Group2 extends FilterGroup,
-> = {
-  [Key in keyof Group1]: Prettify<
-    Key extends keyof Group2
-      ? Prettify<
-          {
-            conditions: Prettify<
-              GetConditionFromFilterGroup<Group1> &
-                GetConditionFromFilterGroup<Group2>
-            >;
-          } & Omit<Group1[Key], 'conditions'> &
-            Omit<Group2[Key], 'conditions'>
-        >
-      : { conditions: GetConditionFromFilterGroup<Group1> } & Group2
-  >;
-};
-
-type SharedFilterResult<TOrResult, TAndResult, TBuildResult> = {
-  or: TOrResult;
-  and: TAndResult;
-  build: () => TBuildResult;
-};
-type LogicalOperatorResult<
-  TLogicalOperator extends LogicalOperator,
-  TRowMap extends RowMap,
-  TField extends keyof TRowMap,
-  TOperator extends keyof TRowMap[TField]['rules'],
-  TType extends TRowMap[TField]['type'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  >,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<TType>,
-  TFilters extends FilterGroup<
-    TLogicalOperator,
-    TRowMap,
-    TField,
-    TOperator,
-    TValue,
-    TAdditionalValue
-  >,
-  TOr = LogicalOperatorFilterFunctionTest<'or', TRowMap, TFilters>,
-  TAnd = LogicalOperatorFilterFunctionTest<'and', TRowMap, TFilters>,
-> = SharedFilterResult<TOr, TAnd, TFilters>;
-
-type FilterFunctionOptions<
-  TRowMap extends RowMap,
-  TField extends keyof TRowMap,
-  TOperator extends keyof TRowMap[TField]['rules'],
-  TValue,
-> = Prettify<
-  {
-    field: TField;
-    operator: TOperator;
-  } & ([TValue] extends [never]
-    ? {
-        value?: never;
-      }
-    : {
-        value: TValue;
-      })
->;
-type GetConditionalValue<
-  TRowMap extends RowMap,
-  TFields extends keyof TRowMap = keyof TRowMap,
-  TType extends TRowMap[TFields]['type'] = TRowMap[keyof TRowMap]['type'],
-  TOperator extends
-    keyof TRowMap[TFields]['rules'] = keyof TRowMap[keyof TRowMap]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  > = GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  >,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<TType> = never,
-> = TOperator extends 'between'
-  ? [TValue, TAdditionalValue]
-  : TOperator extends keyof EmptyOperators
-    ? never
-    : TValue;
-type LogicalOperatorConditionOptions<
-  TLogicalOperator extends LogicalOperator,
-  TRowMap extends RowMap = RowMap,
-> = Prettify<
-  {
-    [LogicalOperator in TLogicalOperator]: Prettify<
-      FilterFunctionOptions<
-        TRowMap,
-        keyof TRowMap,
-        keyof TRowMap[keyof TRowMap]['rules'],
-        GetConditionalValue<TRowMap>
-      >
-    >;
-  } & {
-    [Key in Exclude<LogicalOperator, TLogicalOperator>]?: never;
-  }
->;
-type ConditionOptions<
-  TRowMap extends RowMap,
-  TFields extends keyof TRowMap = keyof TRowMap,
-  TType extends TRowMap[TFields]['type'] = TRowMap[TFields]['type'],
-  TOperator extends
-    keyof TRowMap[TFields]['rules'] = keyof TRowMap[TFields]['rules'],
-  TLogicalOperator extends LogicalOperator,
-  TValue extends GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  > = GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  >,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<TType> = never,
-> = FilterFunctionOptions<
-  TRowMap,
-  TFields,
-  TOperator,
-  GetConditionalValue<
-    TRowMap,
-    TFields,
-    TType,
-    TOperator,
-    TValue,
-    TAdditionalValue
-  >
-> &
-  Partial<LogicalOperatorConditionOptions<TLogicalOperator, TRowMap>>;
-export type CreateFilterOptions<
-  TLogicalOperator extends LogicalOperator,
-  TRowMap extends RowMap,
-  TFields extends keyof TRowMap = keyof TRowMap,
-  TType extends TRowMap[TFields]['type'] = TRowMap[TFields]['type'],
-  TOperator extends
-    keyof TRowMap[TFields]['rules'] = keyof TRowMap[TFields]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  > = GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  >,
-  TAdditionalValue extends GetTypeFromFunctionTypeMap<TType> = never,
-> = FilterFunctionOptions<
-  TRowMap,
-  TFields,
-  TOperator,
-  GetConditionalValue<
-    TRowMap,
-    TFields,
-    TType,
-    TOperator,
-    TValue,
-    TAdditionalValue
-  >
-> &
-  Partial<LogicalOperatorConditionOptions<TLogicalOperator, TRowMap>>;
-
-type LogicalOperatorFilterFunctionTest<
-  TLogicalOperator extends LogicalOperator,
-  TRowMap extends RowMap,
-  PreviousFilters extends FilterGroup<TLogicalOperator, TRowMap>,
-> = <
-  TField extends keyof TRowMap,
-  TType extends TRowMap[TField]['type'],
-  TOperator extends keyof TRowMap[TField]['rules'],
-  TValue extends GetTypeFromFunctionTypeMap<
-    TOperator extends keyof EmptyOperators ? 'empty' : TType
-  >,
-  TValue2 extends GetTypeFromFunctionTypeMap<TType>,
-  TFilters extends DefaultFilterGroup<
-    TLogicalOperator,
-    TRowMap,
-    TField,
-    TOperator,
-    TValue,
-    never
-  >,
-  JointFilters extends FilterGroup<
-    TLogicalOperator,
-    TRowMap,
-    TField,
-    TOperator,
-    TValue,
-    never,
-    FilterCondition<TRowMap, TField, TOperator, TValue, never>
-  > = JoinFilterGroups<PreviousFilters, TFilters>,
->(
-  options: ConditionOptions<TRowMap, TField, TType, TOperator, TValue, TValue2>
-) => LogicalOperatorResult<
-  TLogicalOperator,
-  TRowMap,
-  TField,
-  TOperator,
-  TType,
-  TValue,
-  TValue2,
-  JointFilters
->;
-
 export type GetRuleKey<
   TRowMap extends RowMap,
   TField extends keyof TRowMap,
@@ -737,33 +440,81 @@ export type FilterSymbols<
 > = {
   [Operator in keyof TRowMap[TField]['rules']]?: string;
 };
+type FindPathForOperator<
+  T,
+  Key extends string,
+  Op extends string,
+  Path extends string = '',
+> = {
+  [P in keyof T]: P extends 'and' | 'or'
+    ? T[P] extends object
+      ? FindPathForOperator<T[P], Key, Op, Path extends '' ? P : `${Path}.${P}`>
+      : never
+    : P extends Key
+      ? T[P] extends { operator: infer O }
+        ? O extends Op
+          ? Path extends ''
+            ? `${P}.${O & string}`
+            : `${Path}.${P}.${O & string}`
+          : never
+        : never
+      : never;
+}[keyof T];
+
+type ExtractOperatorValuePairs<
+  T,
+  TField extends string | number | symbol,
+  TRowMap extends RowMap,
+  TFilterMap extends RowFilterMap<TRowMap>,
+  AdditionalProps = {},
+> = T extends object
+  ? (T extends { [Field in TField]: infer OV }
+      ? OV extends {
+          operator: infer Operator extends string;
+          value: infer Value;
+        }
+        ? {
+            [Op in Operator]: Prettify<
+              {
+                value: Value;
+                path: FindPathForOperator<TFilterMap, TField & string, Op>;
+              } & AdditionalProps
+            >;
+          }
+        : {}
+      : {}) &
+      (T extends Array<infer U>
+        ? ExtractOperatorValuePairs<
+            U,
+            TField,
+            TRowMap,
+            TFilterMap,
+            AdditionalProps
+          >
+        : {
+            [P in keyof T]: ExtractOperatorValuePairs<
+              T[P],
+              TField,
+              TRowMap,
+              TFilterMap,
+              AdditionalProps
+            >;
+          }[keyof T])
+  : {};
 export type GetFilterMapOperators<
   TRowMap extends RowMap,
   TFilterMap extends RowFilterMap<TRowMap>,
   TField extends FilterMapFields<TRowMap, TFilterMap>,
 > = Prettify<
   UnionToIntersection<
-    ExtractOperatorValuePairs<TFilterMap[keyof TFilterMap], TField>
+    ExtractOperatorValuePairs<
+      TFilterMap[keyof TFilterMap],
+      TField,
+      TRowMap,
+      TFilterMap
+    >
   >
 >;
-type ExtractOperatorValuePairs<
-  T,
-  K extends string | number | symbol,
-> = T extends object
-  ? (T extends { [key in K]: infer OV }
-      ? OV extends {
-          operator: infer Operator extends string;
-          value: infer Value;
-        }
-        ? { [key in Operator]: Value }
-        : {}
-      : {}) &
-      (T extends Array<infer U>
-        ? ExtractOperatorValuePairs<U, K>
-        : {
-            [P in keyof T]: ExtractOperatorValuePairs<T[P], K>;
-          }[keyof T])
-  : {};
 type GetFilterMapKeys<
   TRowMap extends RowMap,
   TFilterMap extends RowFilterMap<TRowMap>,
@@ -801,7 +552,13 @@ export type QueryStringTransformer<
       GetFilterMapOperators<TRowMap, TFilterMap, Key>
     >
   ) => {
-    [_Key in keyof GetFilterMapOperators<TRowMap, TFilterMap, Key>]?: string;
+    // [_Key in DeepKeyAt<TFilterMap, Key>]?: string;
+    // [_Key in keyof GetFilterMapOperators<TRowMap, TFilterMap, Key>]?: string;
+    [_ in FindPathForOperator<
+      TFilterMap,
+      Key & string,
+      keyof GetFilterMapOperators<TRowMap, TFilterMap, Key> & string
+    >]?: string;
   };
 };
 export type CreateFilterOptions1<
@@ -845,16 +602,6 @@ export type CreateFilterOptions1<
   };
   queryStringTransformer?: QueryStringTransformer<TRowMap, TFilterMap>;
 };
-export type QueryString<TRowMap extends RowMap> = {
-  [Key in keyof RowFilterMap<TRowMap>]: string;
-};
-type CreateQueryStringResult<
-  TRowMap extends RowMap,
-  TFilterMap extends RowFilterMap<TRowMap>,
-> = {
-  filters: AddPropertiesResult<TFilterMap, { queryString: string }>;
-  queryString: string;
-};
 
 export class RowFilter<TRowMap extends RowMap> {
   private rowMap!: TRowMap;
@@ -864,18 +611,6 @@ export class RowFilter<TRowMap extends RowMap> {
     style: 'long',
     type: 'disjunction',
   });
-  private queryStrings = new Store<{
-    [Key in keyof TRowMap]?: {
-      [Operator in keyof TRowMap[Key]['rules']]?: {
-        value: string;
-        order: `${number}.${number}`;
-        logicalOperator?: LogicalOperator;
-      };
-    };
-  }>({});
-  private queryStrings1 = new Store<
-    RowFilterMap<TRowMap, { queryString: string }>
-  >({});
 
   constructor(rowMap: TRowMap) {
     this.rowMap = rowMap;
@@ -898,10 +633,15 @@ export class RowFilter<TRowMap extends RowMap> {
       TRowMap,
       TFilterMap
     >,
-  >(filterMapValue: RowFilterMapValue<TRowMap>, field?: TField) {
+  >(
+    filterMapValue: RowFilterMapValue<TRowMap>,
+    options: { field?: TField; currentPath: Array<string> }
+  ) {
     let result: Record<string, unknown> = {};
 
     // Process the entries in the filter map value
+    // Needs to be done like this because of the recursive calls
+    // TODO: check if this can be changed
     const filterMapEntries = entries(filterMapValue);
 
     function mergeResults(
@@ -934,7 +674,11 @@ export class RowFilter<TRowMap extends RowMap> {
       }
     }
 
+    const { currentPath = [], field } = options;
+
     for (const [key, data] of filterMapEntries) {
+      const newPath = [...currentPath, key];
+
       // If we're looking for a specific field and this is it
       if (
         field &&
@@ -942,7 +686,7 @@ export class RowFilter<TRowMap extends RowMap> {
         this.isRowFilterFieldMap(String(field), data)
       ) {
         const { operator, value } = data;
-        result[String(operator)] = value;
+        result[String(operator)] = { value, path: newPath.join('.') };
       }
       // If this is a logical operator (AND, OR, etc.)
       else if (isLogicalOperator(key)) {
@@ -953,7 +697,7 @@ export class RowFilter<TRowMap extends RowMap> {
             const nestedOperators = this.getFilterMapOperators<
               TFilterMap,
               TField
-            >(item, field);
+            >(item, { field, currentPath: newPath });
 
             mergeResults(result, nestedOperators);
           }
@@ -964,7 +708,10 @@ export class RowFilter<TRowMap extends RowMap> {
           const nestedOperators = this.getFilterMapOperators<
             TFilterMap,
             TField
-          >(data as RowFilterMapValue<TRowMap>, field);
+          >(data as RowFilterMapValue<TRowMap>, {
+            field,
+            currentPath: newPath,
+          });
 
           mergeResults(result, nestedOperators);
         }
@@ -979,14 +726,20 @@ export class RowFilter<TRowMap extends RowMap> {
             if (!result[key]) {
               result[key] = {};
             }
-            (result[key] as Record<string, unknown>)[String(operator)] = value;
+            (result[key] as Record<string, unknown>)[String(operator)] = {
+              value,
+              path: [...newPath, operator].join('.'),
+            };
           }
         } else if (typeof data === 'object' && data !== null) {
           // Recursively process nested objects
           const nestedOperators = this.getFilterMapOperators<
             TFilterMap,
             TField
-          >(data as RowFilterMapValue<TRowMap>, field);
+          >(data as RowFilterMapValue<TRowMap>, {
+            field,
+            currentPath: newPath,
+          });
 
           // If we have a specific field, directly merge the results
           if (field) {
@@ -1003,103 +756,7 @@ export class RowFilter<TRowMap extends RowMap> {
     return result as GetFilterMapOperators<TRowMap, TFilterMap, TField>;
   }
 
-  private addQueryString(options: {
-    field: string;
-    operator: string;
-    value: string;
-    order: `${number}.${number}`;
-    logicalOperator?: LogicalOperator;
-  }) {
-    const { field, operator, ...rest } = options;
-
-    this.queryStrings.setState((prev) => ({
-      ...prev,
-      [field]: {
-        ...prev[field],
-        [operator]: { ...rest },
-      },
-    }));
-  }
-
-  private addQueryString1<TFilterMap extends RowFilterMap<TRowMap>>(
-    logicalOperator: keyof TFilterMap,
-    [key, data]: Entry<RowFilterMapValue<TRowMap>>
-  ) {
-    if (this.isRowFilterFieldMap(key, data)) {
-      this.queryStrings1.setState((prev) =>
-        deepMerge(prev, {
-          [String(logicalOperator)]: {
-            [key]: {
-              value: '',
-              operator: data.operator,
-            },
-          },
-        })
-      );
-    }
-
-    if (isLogicalOperator(key)) {
-      // this.queryStrings1.setState(prev=>deepMerge(prev, {[key]: this.addQueryString1()}))
-    }
-  }
-
-  private applyQueryStringTransformer<
-    TFilterMapValue extends RowFilterMapValue<TRowMap>,
-    TFilterMap extends RowFilterMap<TRowMap>,
-  >(
-    filterMap: RowFilterMapValue<TRowMap>,
-    filterEntries: Entries<RowFilterMapValue<TRowMap>>,
-    queryStringTransformer:
-      | QueryStringTransformer<TRowMap, TFilterMap>
-      | undefined
-    // callback: <TKey extends keyof TFilterMapValue>(
-    //   options: TFilterMapValue[TKey] & { key: TKey }
-    // ) => RowFilterMapValue<TRowMap>
-  ) {
-    if (!queryStringTransformer) {
-      return undefined;
-    }
-
-    const allOperators = this.getFilterMapOperators<TFilterMap>(filterMap);
-    const transformed = { ...filterMap };
-
-    for (const [key, data] of filterEntries) {
-      const field = String(key);
-
-      if (this.isRowFilterFieldMap(field, data) && data) {
-        const { operator } = data;
-        const operators = allOperators[field as keyof typeof allOperators];
-        const transformedStrings = queryStringTransformer?.[
-          field as FilterMapFields<TRowMap, TFilterMap>
-        ]?.({
-          field: field as any,
-          operators: operators as any,
-          queryStrings: {} as any,
-        });
-        const transformedString =
-          transformedStrings?.[operator as keyof typeof transformedStrings];
-        const curr = transformed[key];
-
-        if (this.isRowFilterFieldMap(key, curr)) {
-          curr.value = (transformedString ?? '') as any;
-        }
-      }
-
-      if (isLogicalOperator(key)) {
-        const t = this.applyQueryStringTransformer(
-          data as RowFilterFieldMap<TRowMap>,
-          filterEntries,
-          queryStringTransformer
-        );
-
-        console.log(t);
-      }
-    }
-
-    return transformed;
-  }
-
-  private createQueryString<TFilterMap extends RowFilterMap<TRowMap>>(
+  private createQueryString<TFilterMap extends RowFilterMap<TRowMap>, TResult = TFilterMap>(
     filterMapValue: RowFilterMapValue<TRowMap>,
     options: Omit<CreateFilterOptions1<TRowMap, TFilterMap>, 'filterMap'> & {
       logicalOperator?: keyof TFilterMap;
@@ -1107,7 +764,6 @@ export class RowFilter<TRowMap extends RowMap> {
       currentPathSegments?: Array<DeepKeysOfObjectsOnly<TFilterMap>>;
     }
   ) {
-    const allOperators = this.getFilterMapOperators<TFilterMap>(filterMapValue);
     const filterEntries = entries(filterMapValue);
     const {
       logicalOperator,
@@ -1117,25 +773,14 @@ export class RowFilter<TRowMap extends RowMap> {
       filterMap,
       currentPathSegments = [logicalOperator],
     } = options;
-    const transformedQueryStrings = {} as Record<keyof TRowMap, unknown>;
+    const allOperators = this.getFilterMapOperators<TFilterMap>(
+      filterMapValue,
+      { currentPath: [String(logicalOperator)] }
+    );
+
     let transformedFilterMap = { ...filterMap };
-    // let filterMapTransformed = addProperties({
-    //   source: filterMap,
-    //   // source: filterMapValue,
-    //   additionalProperties: { queryString: '' },
-    //   ignore: [String(logicalOperator)],
-    // });
     let queryString = '';
     let index = 0;
-    let transformed = { ...filterMapValue };
-
-    // this.applyQueryStringTransformer(
-    //   filterMapValue,
-    //   filterEntries,
-    //   queryStringTransformer
-    // );
-
-    // this.queryStrings1.setState(() => filterMapValue);
 
     for (const [key, data] of filterEntries) {
       const currentKeyString = String(key);
@@ -1178,18 +823,6 @@ export class RowFilter<TRowMap extends RowMap> {
           operators: operators as any,
           queryStrings: {} as any,
         });
-        const transformedString =
-          transformedStrings?.[operator as keyof typeof transformedStrings];
-
-        // if (transformedString && logicalOperator) {
-        //   transformed[key].value = transformedString;
-        //   deepReplace(filterMapValue, (curr) => {
-        //     if (curr.key === key && curr.operator === operator) {
-        //       return { ...curr, value: someNewValue };
-        //     }
-        //     return curr;
-        //   });
-        // }
 
         const propertyPathSegments = [...currentPathSegments, field].join(
           '.'
@@ -1198,6 +831,12 @@ export class RowFilter<TRowMap extends RowMap> {
         addProperties({
           source: transformedFilterMap,
           additionalProperties: () => {
+            const currentPath = `${propertyPathSegments}.${operator}`;
+            const customQueryString =
+              transformedStrings?.[
+                currentPath as keyof typeof transformedStrings
+              ];
+
             if (operator === 'between') {
               if (!Array.isArray(value)) {
                 throw this.detailedError.error(
@@ -1208,22 +847,27 @@ export class RowFilter<TRowMap extends RowMap> {
               const [value1, value2] = value;
 
               return {
-                queryString: `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
+                queryString:
+                  customQueryString ??
+                  `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
               };
             }
 
             if (isEmptyOperator(operator)) {
               return {
-                queryString: `${field} ${symbol ?? operator}`,
+                queryString:
+                  customQueryString ?? `${field} ${symbol ?? operator}`,
               };
             }
 
             return {
-              queryString: `${field} ${symbol ?? operator} '${value}'`,
+              queryString:
+                customQueryString ??
+                `${field} ${symbol ?? operator} '${value}'`,
             };
           },
           applyTo: [propertyPathSegments],
-        } as const);
+        });
 
         // Append the logical operator when we're not on the last filter
         if (
@@ -1236,22 +880,6 @@ export class RowFilter<TRowMap extends RowMap> {
 
           queryString += ` ${op} `;
         }
-
-        // if (transformedStrings && Object.keys(transformedStrings).length > 0) {
-        //   this.queryStrings1.setState((prev) =>
-        //     deepMerge(prev, {
-        //       [String(logicalOperator)]: {
-        //         [key]: {
-        //           value:
-        //             transformedStrings?.[
-        //               operator as keyof typeof transformedStringsoperator as keyof typeof transformedStrings
-        //             ],
-        //           operator,
-        //         },
-        //       },
-        //     })
-        //   );
-        // }
       }
 
       if (isLogicalOperator(key)) {
@@ -1279,44 +907,14 @@ export class RowFilter<TRowMap extends RowMap> {
         queryString = `(${queryString})`;
       }
 
-      // const t = this.queryStrings1.state;
-
-      // transformedQueryStrings[field as keyof TRowMap] = transformedStrings;
-
-      // if (transformedStrings) {
-      //   const transformed = entries(transformedStrings).map(
-      //     ([field, values]) => {
-      //       if (queryString.includes(String(field))) {
-      //         return queryString.replace(`{${String(field)}}`, String(values));
-      //       }
-
-      //       return queryString;
-      //     }
-      //   );
-      //   const news = entries(transformedStrings).reduce(
-      //     (acc, [field, values]) => {
-      //       const e = entries(values!);
-      //       return acc;
-      //     },
-      //     queryString
-      //   );
-      //   debugger;
-      // }
-
       index++;
     }
 
+    // Remove all parenthesis
     if (includeParenthesis === false) {
-      // Remove all parenthesis
       queryString = queryString.replaceAll('(', '').replaceAll(')', '');
     }
 
-    const s = transformedQueryStrings;
-    // const t = queryStrings.state;
-
-    // queryStrings.setState((prev) => deepMerge(s, prev));
-
-    // const t1 = queryStrings.state;
     return {
       filterMap: transformedFilterMap,
       queryString,
@@ -1365,33 +963,6 @@ export class RowFilter<TRowMap extends RowMap> {
         ...rest,
       }
     );
-
-    // const queryString = entries(filterMap)
-    //   .map(([logicalOperator, rowFilterMapValue]) => {
-    //     if (typeof logicalOperator !== 'string') {
-    //       throw this.detailedError.error(
-    //         `The key "${String(logicalOperator)}" must be a string. It is currently a ${typeof logicalOperator}`
-    //       );
-    //     }
-
-    //     if (!isLogicalOperator(logicalOperator)) {
-    //       throw this.detailedError.error(
-    //         `The key "${String(logicalOperator)}" must either be ${this.listFormatter.format(Object.keys(logicalOperators.Values))}`
-    //       );
-    //     }
-
-    //     if (typeof rowFilterMapValue !== 'object') {
-    //       throw this.detailedError.error(
-    //         `The value for "${logicalOperator}" must be an object`
-    //       );
-    //     }
-
-    //     return this.createQueryString(
-    //       rowFilterMapValue as RowFilterMapValue<TRowMap>,
-    //       { logicalOperator, ...rest }
-    //     );
-    //   })
-    //   .join('');
 
     return {
       filters: result /*as AddPropertiesResult<
