@@ -21,11 +21,9 @@ import { FilterTypes, NonNestedFilterTypes, RowMap } from './row';
 import {
   EnsureIs,
   entries,
-  Join,
   Prettify,
   StringReplace,
-  typedJoin,
-  UnionToIntersection,
+  UnionToIntersection
 } from './utils';
 
 export type FilterOptions<
@@ -145,15 +143,6 @@ type GenericFilterFunction<
   value: Arg;
   query: GenericQuery<TField, TType, TOperator, Arg>;
 };
-type FunctionNameMapValue<
-  TField extends string = string,
-  TType extends FilterTypes = FilterTypes,
-  TOperator extends GetOperator<TType> = GetOperator<TType>,
-> =
-  | GenericFilterFunction<TField, TType, TOperator>
-  | EmptyFunction<TField, TType, TOperator>
-  | BetweenFunction<TField, TType, TOperator>;
-
 export type FilterRowMapValue<
   TRowMap extends RowMap,
   TRowMapKey extends keyof TRowMap,
@@ -178,22 +167,6 @@ export type FilterRowMapValue<
             TRuleKey
           >
     : never;
-type Test = ReturnType<
-  FilterRowMapValue<
-    {
-      name: {
-        text: 'Name';
-        type: 'string';
-        rules: {
-          contains: 'Contains';
-          'not-contains': 'Not contains';
-        };
-      };
-    },
-    'name',
-    'contains'
-  >
->;
 export type FilterRowFunctionMap<
   TRowMap extends RowMap,
   TKey extends keyof TRowMap,
@@ -207,143 +180,6 @@ export type FilterRowFunctionMap<
 export type FilterRowMap<TRowMap extends RowMap> = {
   [Key in keyof TRowMap]: FilterRowFunctionMap<TRowMap, Key>;
 };
-export type LogicalOperatorFunctionResult<
-  Type extends LogicalOperator,
-  TRowMap extends RowMap,
-  TKey extends keyof TRowMap,
-  TRuleKey extends keyof TRowMap[TKey]['rules'],
-  TFilter extends FilterParam<TRowMap, TKey, TRuleKey>,
-  TFilters extends Readonly<[TFilter, ...TFilter[]]>,
-> = {
-  type: Type;
-  filters: TFilters extends LogicalOperatorFunction<
-    NoInfer<Type>,
-    TRowMap,
-    keyof TRowMap,
-    keyof TRowMap[keyof TRowMap]['rules']
-  >
-    ? ReturnType<TFilters>
-    : TFilters;
-  queryString: Join<TFilters, ` ${Uppercase<Type>} `>;
-  queryObject: any; // TODO
-};
-// export type LogicalOperatorFunction<Type extends LogicalOperator> = <
-//   const TFilters extends Array<unknown>,
-// >(
-//   ...filters: TFilters
-// ) => LogicalOperatorFunctionResult<Type, TFilters>;
-
-type FilterParam<
-  TRowMap extends RowMap,
-  TKey extends keyof TRowMap,
-  TRuleKey extends keyof TRowMap[TKey]['rules'],
-> = ReturnType<FilterRowMapValue<TRowMap, TKey, TRuleKey>>;
-// | LogicalOperatorFunction<LogicalOperator, TRowMap>;
-export type LogicalOperatorFunction<
-  Type extends LogicalOperator,
-  TRowMap extends RowMap,
-  TKey extends keyof TRowMap,
-  TRuleKey extends keyof TRowMap[TKey]['rules'],
-> = <
-  const TFilter extends FilterParam<TRowMap, TKey, TRuleKey>,
-  const TFilters extends Readonly<[TFilter, ...TFilter[]]>,
->(
-  filters: TFilters
-) => LogicalOperatorFunctionResult<
-  Type,
-  TRowMap,
-  TKey,
-  TRuleKey,
-  TFilter,
-  TFilters
->;
-
-export type LogicalOperatorMap<TRowMap extends RowMap> = {
-  and: LogicalOperatorFunction<
-    'and',
-    TRowMap,
-    keyof TRowMap,
-    keyof TRowMap[keyof TRowMap]['rules']
-  >;
-  or: LogicalOperatorFunction<
-    'or',
-    TRowMap,
-    keyof TRowMap,
-    keyof TRowMap[keyof TRowMap]['rules']
-  >;
-};
-
-function emptyFunction<
-  TField extends string,
-  TType extends FilterTypes,
-  TOperator extends GetOperator<TType>,
->(
-  field: TField,
-  type: TType,
-  operator: TOperator
-): EmptyFunction<TField, TType, TOperator> {
-  return () => ({
-    field,
-    type,
-    operator,
-    query: `${field} ${operator}`,
-  });
-}
-
-function betweenFunction<
-  TField extends string,
-  TType extends FilterTypes,
-  TOperator extends GetOperator<TType>,
->(
-  field: TField,
-  type: TType,
-  operator: TOperator
-): BetweenFunction<TField, TType, TOperator> {
-  return (arg1, arg2) => ({
-    field,
-    operator,
-    query: `${field} is between ${arg1} and ${arg2}` as BetweenQuery<
-      TField,
-      EnsureIs<typeof arg1, string>,
-      EnsureIs<typeof arg2, string>
-    >,
-    type,
-    values: [arg1, arg2],
-  });
-}
-
-function genericFilterFunction<
-  TField extends string,
-  TType extends FilterTypes,
-  TOperator extends GetOperator<TType>,
->(
-  field: TField,
-  type: TType,
-  operator: TOperator
-): GenericFilterFunction<TField, TType, TOperator> {
-  return (arg1) => ({
-    field,
-    type,
-    operator,
-    value: arg1,
-    query: `${field} ${operator} ${arg1}` as GenericQuery<
-      TField,
-      TType,
-      TOperator,
-      typeof arg1
-    >,
-  });
-}
-
-function _joinQueries<
-  TLogicalOperator extends LogicalOperator,
-  const TQueries extends Array<string>,
->(logicalOperator: TLogicalOperator, ...queries: TQueries) {
-  return typedJoin(
-    queries,
-    ` ${logicalOperator.toUpperCase() as Uppercase<TLogicalOperator>} `
-  );
-}
 
 export function isFilterMap<
   TRowMap extends RowMap,
