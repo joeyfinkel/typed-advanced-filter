@@ -1,7 +1,8 @@
 import { DetailedError } from './errors/detailedError';
 import {
   addProperties,
-  DeepKeysOfObjectsOnly
+  AddPropertiesResult,
+  DeepKeysOfObjectsOnly,
 } from './filter/utils';
 import {
   BasicDateOperators,
@@ -15,6 +16,7 @@ import {
   LogicalOperator,
   logicalOperators,
 } from './operators';
+import { QueryString } from './query-string';
 import { FilterTypes, NonNestedFilterTypes, RowMap } from './row';
 import {
   EnsureIs,
@@ -538,7 +540,6 @@ export type QueryStringTransformerOptions<
 > = {
   field: TField;
   operators: TOperators;
-  queryStrings: { [Op in keyof TOperators]: string };
 };
 export type QueryStringTransformer<
   TRowMap extends RowMap,
@@ -561,7 +562,7 @@ export type QueryStringTransformer<
     >]?: string;
   };
 };
-export type CreateFilterOptions1<
+export type CreateFilterOptions<
   TRowMap extends RowMap,
   TFilterMap extends RowFilterMap<TRowMap>,
 > = {
@@ -602,10 +603,16 @@ export type CreateFilterOptions1<
   };
   queryStringTransformer?: QueryStringTransformer<TRowMap, TFilterMap>;
 };
+export type CreatedFilter<
+  TRowMap extends RowMap,
+  TFilterMap extends RowFilterMap<TRowMap>,
+> = {
+  filterMap: AddPropertiesResult<TFilterMap, { queryString: string }>;
+  queryString: string;
+};
 
 export class RowFilter<TRowMap extends RowMap> {
   private rowMap!: TRowMap;
-  // private filterMap!: TFilterMap
   private detailedError = new DetailedError('RowFilter', this);
   private listFormatter = new Intl.ListFormat('en', {
     style: 'long',
@@ -756,12 +763,17 @@ export class RowFilter<TRowMap extends RowMap> {
     return result as GetFilterMapOperators<TRowMap, TFilterMap, TField>;
   }
 
-  private createQueryString<TFilterMap extends RowFilterMap<TRowMap>, TResult = TFilterMap>(
+  private createQueryString<TFilterMap extends RowFilterMap<TRowMap>>(
     filterMapValue: RowFilterMapValue<TRowMap>,
-    options: Omit<CreateFilterOptions1<TRowMap, TFilterMap>, 'filterMap'> & {
+    options: Omit<CreateFilterOptions<TRowMap, TFilterMap>, 'filterMap'> & {
       logicalOperator?: keyof TFilterMap;
       filterMap: TFilterMap;
       currentPathSegments?: Array<DeepKeysOfObjectsOnly<TFilterMap>>;
+      operators?: GetFilterMapOperators<
+        TRowMap,
+        TFilterMap,
+        FilterMapFields<TRowMap, TFilterMap>
+      >;
     }
   ) {
     const filterEntries = entries(filterMapValue);
@@ -777,9 +789,11 @@ export class RowFilter<TRowMap extends RowMap> {
       filterMapValue,
       { currentPath: [String(logicalOperator)] }
     );
+    const mergedOperators = { ...allOperators, ...options.operators };
+    let qs = new QueryString();
 
     let transformedFilterMap = { ...filterMap };
-    let queryString = '';
+    // let queryString = qs.queryString;
     let index = 0;
 
     for (const [key, data] of filterEntries) {
@@ -815,13 +829,12 @@ export class RowFilter<TRowMap extends RowMap> {
         }
 
         // check if there's a query transformer
-        const operators = allOperators[field as keyof typeof allOperators];
+        const operators = mergedOperators[field as keyof typeof allOperators];
         const transformedStrings = queryStringTransformer?.[
           field as FilterMapFields<TRowMap, TFilterMap>
         ]?.({
           field: field as any,
           operators: operators as any,
-          queryStrings: {} as any,
         });
 
         const propertyPathSegments = [...currentPathSegments, field].join(
@@ -846,24 +859,36 @@ export class RowFilter<TRowMap extends RowMap> {
 
               const [value1, value2] = value;
 
+              qs.value =
+                customQueryString ??
+                `${symbol ?? 'is between'} '${value1}' and '${value2}'`;
+
               return {
-                queryString:
-                  customQueryString ??
-                  `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
+                queryString: qs.value,
+                // queryString:
+                //   customQueryString ??
+                //   `${symbol ?? 'is between'} '${value1}' and '${value2}'`,
               };
             }
 
             if (isEmptyOperator(operator)) {
+              qs.value = customQueryString ?? `${field} ${symbol ?? operator}`;
+
               return {
-                queryString:
-                  customQueryString ?? `${field} ${symbol ?? operator}`,
+                queryString: qs.value,
+                // queryString:
+                //   customQueryString ?? `${field} ${symbol ?? operator}`,
               };
             }
 
+            qs.value =
+              customQueryString ?? `${field} ${symbol ?? operator} '${value}'`;
+
             return {
-              queryString:
-                customQueryString ??
-                `${field} ${symbol ?? operator} '${value}'`,
+              // queryString:
+              //   customQueryString ??
+              //   `${field} ${symbol ?? operator} '${value}'`,
+              queryString: qs.value,
             };
           },
           applyTo: [propertyPathSegments],
@@ -878,12 +903,17 @@ export class RowFilter<TRowMap extends RowMap> {
             symbols?.logicalOperators?.[logicalOperator as LogicalOperator] ??
             String(logicalOperator).toUpperCase();
 
-          queryString += ` ${op} `;
+          qs.value += ` ${op} `;
         }
       }
 
       if (isLogicalOperator(key)) {
-        const { logicalOperator, currentPathSegments: _, ...rest } = options;
+        const {
+          logicalOperator,
+          currentPathSegments: _,
+          operators: __,
+          ...rest
+        } = options;
         const op = symbols?.logicalOperators?.[key] ?? key.toUpperCase();
         const nextPathSegments = [...currentPathSegments, currentKeyString];
         const newQueryString = this.createQueryString(
@@ -893,18 +923,19 @@ export class RowFilter<TRowMap extends RowMap> {
             currentPathSegments: nextPathSegments as Array<
               DeepKeysOfObjectsOnly<TFilterMap>
             >,
+            operators: mergedOperators,
             ...rest,
           }
         );
 
-        queryString = `(${queryString})`;
-        queryString += ` (${op} ${newQueryString.queryString})`;
+        qs.value = `(${qs.value})`;
+        qs.value += ` (${op} ${newQueryString.queryString.value})`;
 
         const endingString = ` ${op} )`;
-        if (queryString.endsWith(endingString)) {
-          queryString = queryString.replace(endingString, ')');
+        if (qs.value.endsWith(endingString)) {
+          qs.value = qs.value.replace(endingString, ')');
         }
-        queryString = `(${queryString})`;
+        qs.value = `(${qs.value})`;
       }
 
       index++;
@@ -912,17 +943,17 @@ export class RowFilter<TRowMap extends RowMap> {
 
     // Remove all parenthesis
     if (includeParenthesis === false) {
-      queryString = queryString.replaceAll('(', '').replaceAll(')', '');
+      qs = qs.removeParenthesis();
     }
 
     return {
       filterMap: transformedFilterMap,
-      queryString,
+      queryString: qs,
     };
   }
 
   public createFilter<TFilterMap extends RowFilterMap<TRowMap>>(
-    options: CreateFilterOptions1<TRowMap, TFilterMap>
+    options: CreateFilterOptions<TRowMap, TFilterMap>
   ) {
     const { filterMap, ...rest } = options;
     const keys = Object.keys(filterMap);

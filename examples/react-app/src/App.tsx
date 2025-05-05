@@ -100,10 +100,10 @@ const createdFilters = rows.createFilter({
       },
     },
   },
+  // includeParenthesis: false,
   queryStringTransformer: {
-    total({ field, operators: { eq } }) {
+    total({ field, operators: { eq, gte } }) {
       // return { eq: `this is eq (${eq}) for ${field}` };
-      console.log(eq)
       return {
         'and.or.total.eq': `This is eq ${eq.value} for ${field}`,
       };
@@ -119,11 +119,10 @@ const createdFilters = rows.createFilter({
     //   return {};
     // },
   },
-  customSymbols: {},
 });
 
 function App() {
-  console.log(createdFilters);
+  console.log(createdFilters.queryString);
 
   // console.log(filter);
   return (

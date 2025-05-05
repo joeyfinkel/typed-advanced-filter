@@ -1,5 +1,5 @@
 import { DetailedError } from './errors/detailedError';
-import { CreateFilterOptions1, RowFilter, RowFilterMap } from './filter';
+import { CreateFilterOptions, RowFilter, RowFilterMap } from './filter';
 import { FilterOperatorMap, GetOperator } from './operators';
 import { buildRules, RuleMap, RuleSchema } from './rule';
 import { DeepKeys, entries, Prettify } from './utils';
@@ -197,7 +197,7 @@ export class Rows<in out TMap extends RowMap> extends Array<Row<TMap>> {
   }
 
   createFilter<TFilterMap extends RowFilterMap<TMap>>(
-    options: CreateFilterOptions1<TMap, TFilterMap>
+    options: CreateFilterOptions<TMap, TFilterMap>
   ) {
     const rowMap = this.toRowMap();
     const rowFilter = new RowFilter(rowMap);
